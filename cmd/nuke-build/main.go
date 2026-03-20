@@ -19,7 +19,7 @@ var version = "dev"
 var nukeEngineVersion = "dev"
 
 // generatedBootstrap is written to build/_nuke/main.go.
-// It imports the project's top-level nuke.go package and calls Build().
+// It imports the project's top-level nuke.go package and resolves Def.
 const generatedBootstrap = `package main
 
 import (
@@ -67,7 +67,8 @@ func main() {
 	baseCfg := compiler.New().WithStandard(compiler.Cpp20).WithBuildType(compiler.Debug)
 
 	ctx := cpp.NewContext(builder, baseCfg, rootDir)
-	targets := app.Build(ctx)
+	root := app.Def.Resolve(ctx)
+	targets := target.Collect(root)
 
 	// Union of all target artifact sets; used for non-CLI single-shot operations.
 	var combined artifact.ArtifactSet

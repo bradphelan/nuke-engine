@@ -141,6 +141,39 @@ func TestArtifactSetNotNil(t *testing.T) {
 	}
 }
 
+func TestCollectDeduplicatesGraph(t *testing.T) {
+	mb := &mockBuilder{}
+	mathcore := NewStaticLib("mathcore", emptyMock(), mb)
+	physics := NewStaticLib("physics", emptyMock(), mb).
+		LinkPublic(mathcore)
+	renderer := NewSharedLib("renderer", emptyMock(), mb).
+		LinkPublic(mathcore)
+	simulation := NewSharedLib("simulation", emptyMock(), mb).
+		LinkPrivate(physics).
+		LinkPrivate(renderer)
+	app := NewExe("app", emptyMock(), mb).
+		LinkPublic(mathcore).
+		LinkPrivate(simulation)
+
+	collected := Collect(app)
+	if len(collected) != 5 {
+		t.Fatalf("expected 5 unique targets, got %d", len(collected))
+	}
+	assertTargetNames(t, collected, []string{"app", "mathcore", "simulation", "physics", "renderer"})
+}
+
+func assertTargetNames(t *testing.T, targets []*Target[mockConfig], want []string) {
+	t.Helper()
+	if len(targets) != len(want) {
+		t.Fatalf("expected %d targets, got %d", len(want), len(targets))
+	}
+	for i, target := range targets {
+		if target.Name() != want[i] {
+			t.Fatalf("target[%d] = %q, want %q", i, target.Name(), want[i])
+		}
+	}
+}
+
 func assertHas(t *testing.T, s []string, item string) {
 	t.Helper()
 	for _, v := range s {

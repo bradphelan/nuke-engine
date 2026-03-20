@@ -156,3 +156,25 @@ func (t *Target[C]) ArtifactSet() artifact.ArtifactSet {
 	}
 	panic("unknown target kind")
 }
+
+// Collect returns the unique target graph reachable from root in preorder.
+func Collect[C interface{ Merge(C) C }](root *Target[C]) []*Target[C] {
+	if root == nil {
+		return nil
+	}
+	seen := make(map[*Target[C]]struct{})
+	var out []*Target[C]
+	var visit func(*Target[C])
+	visit = func(t *Target[C]) {
+		if _, ok := seen[t]; ok {
+			return
+		}
+		seen[t] = struct{}{}
+		out = append(out, t)
+		for _, dep := range t.deps {
+			visit(dep.target)
+		}
+	}
+	visit(root)
+	return out
+}

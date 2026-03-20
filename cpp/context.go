@@ -15,7 +15,12 @@ type Context struct {
 	Config  compiler.Config
 	RootDir string
 	mu      sync.Mutex
-	cache   map[string]*target.Target[compiler.Config]
+	cache   map[string]*contextEntry
+}
+
+type contextEntry struct {
+	once sync.Once
+	t    *target.Target[compiler.Config]
 }
 
 // NewContext creates a new Context.
@@ -24,7 +29,7 @@ func NewContext(builder *CppBuilder, cfg compiler.Config, rootDir string) *Conte
 		Builder: builder,
 		Config:  cfg,
 		RootDir: rootDir,
-		cache:   make(map[string]*target.Target[compiler.Config]),
+		cache:   make(map[string]*contextEntry),
 	}
 }
 
@@ -32,11 +37,15 @@ func NewContext(builder *CppBuilder, cfg compiler.Config, rootDir string) *Conte
 // returning the cached result on every subsequent call.
 func (c *Context) Once(name string, fn func() *target.Target[compiler.Config]) *target.Target[compiler.Config] {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if t, ok := c.cache[name]; ok {
-		return t
+	entry, ok := c.cache[name]
+	if !ok {
+		entry = &contextEntry{}
+		c.cache[name] = entry
 	}
-	t := fn()
-	c.cache[name] = t
-	return t
+	c.mu.Unlock()
+
+	entry.once.Do(func() {
+		entry.t = fn()
+	})
+	return entry.t
 }
