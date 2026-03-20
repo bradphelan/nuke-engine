@@ -28,6 +28,16 @@ func (m *mockBackend) ExeArgs(cfg compiler.Config, out string, objs, libs []stri
 }
 func (m *mockBackend) ParseDiscoveredDeps(output string) []string { return nil }
 
+func TestProjectAccessors(t *testing.T) {
+	dir := t.TempDir()
+	cfg := compiler.New().WithStandard(compiler.Cpp20)
+	mb := &mockBackend{}
+	p, _ := Open(filepath.Join(dir, "build"), mb, cfg)
+	defer p.Close()
+	if p.Config().Standard() != compiler.Cpp20 { t.Fatal("config") }
+	if p.Backend().ID() != "mock:1.0" { t.Fatal("backend") }
+}
+
 func TestProjectBuildDir(t *testing.T) {
 	dir := t.TempDir()
 	buildDir := filepath.Join(dir, "build", "debug")

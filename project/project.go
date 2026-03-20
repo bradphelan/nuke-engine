@@ -37,6 +37,9 @@ func Open(buildDir string, backend compiler.Backend, config compiler.Config) (*P
 
 func (p *Project) Close() error { return p.engine.Close() }
 
+func (p *Project) Backend() compiler.Backend { return p.backend }
+func (p *Project) Config() compiler.Config   { return p.config }
+
 func (p *Project) Build(ctx context.Context, target artifact.ArtifactSet) ([]artifact.Artifact, error) {
 	return p.engine.Resolve(ctx, target)
 }
