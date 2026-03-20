@@ -13,6 +13,11 @@ import (
 // version is set at build time via -ldflags="-X main.version=..."
 var version = "dev"
 
+// nukeEngineVersion is the published module version to use when no local
+// nuke-engine checkout is found. Set at release time via
+// -ldflags="-X main.nukeEngineVersion=v1.2.3".
+var nukeEngineVersion = "dev"
+
 // generatedBootstrap is written to build/_nuke/main.go.
 // It imports the project's top-level nuke.go package and calls Build().
 const generatedBootstrap = `package main
@@ -162,8 +167,14 @@ func main() {
 	// rootDir is the parent of the project dir (e.g. physics-engine root)
 	rootDir := filepath.Dir(absProject)
 
-	// Repo root is two levels above rootDir (physics-engine -> examples -> repo)
-	repoRoot := filepath.Dir(filepath.Dir(rootDir))
+	// Walk ancestors to find a local nuke-engine checkout (dev mode).
+	// In deployed mode this returns "" and we reference the published module.
+	nukeEngineRoot := findNukeEngineRoot(absProject)
+	if nukeEngineRoot == "" && nukeEngineVersion == "dev" {
+		log.Fatal("nuke-engine not found as a local checkout and nukeEngineVersion is 'dev'.\n" +
+			"Either run from inside the nuke-engine source tree, or build nuke-build with\n" +
+			"-ldflags=\"-X main.nukeEngineVersion=vX.Y.Z\"")
+	}
 
 	// Determine the import path for the project's nuke.go package.
 	// We read it from the project's go.mod module declaration.
@@ -178,8 +189,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Write go.mod for the bootstrap runner
+	// Write go.mod for the bootstrap runner.
+	// In deployed mode add a require so Go fetches nuke-engine from the module proxy/cache.
 	gomod := "module nuke_runner\n\ngo 1.26.1\n"
+	if nukeEngineRoot == "" {
+		gomod += fmt.Sprintf("\nrequire github.com/bradphelan/nuke-engine %s\n", nukeEngineVersion)
+	}
 	if err := os.WriteFile(filepath.Join(stageDir, "go.mod"), []byte(gomod), 0644); err != nil {
 		log.Fatal(err)
 	}
@@ -196,8 +211,11 @@ func main() {
 	}
 	// Include the project dir itself (the nuke.go package to import)
 	fmt.Fprintf(&w, "\t%s\n", filepath.ToSlash(absProject))
-	// Include nuke-engine repo root to satisfy github.com/bradphelan/nuke-engine imports
-	fmt.Fprintf(&w, "\t%s\n", filepath.ToSlash(repoRoot))
+	// In dev mode include the local nuke-engine checkout so module resolution
+	// doesn't go to the network. In deployed mode the go.mod require handles it.
+	if nukeEngineRoot != "" {
+		fmt.Fprintf(&w, "\t%s\n", filepath.ToSlash(nukeEngineRoot))
+	}
 	w.WriteString(")\n")
 	if err := os.WriteFile(filepath.Join(stageDir, "go.work"), []byte(w.String()), 0644); err != nil {
 		log.Fatal(err)
@@ -257,6 +275,23 @@ func forwardedArgs() []string {
 		}
 	}
 	return result
+}
+
+// findNukeEngineRoot walks up the directory tree from startDir looking for a
+// local nuke-engine checkout — a directory whose go.mod declares
+// module github.com/bradphelan/nuke-engine.
+func findNukeEngineRoot(startDir string) string {
+	dir := startDir
+	for {
+		if readModuleName(dir) == "github.com/bradphelan/nuke-engine" {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
 }
 
 func readModuleName(dir string) string {
