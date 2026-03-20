@@ -57,7 +57,7 @@ func TestFullDemoBuild(t *testing.T) {
 	builder := cpp.NewBuilder(backend, buildDir)
 	baseCfg := compiler.New().WithStandard(compiler.Cpp20).WithBuildType(compiler.Debug)
 
-	// Build the target graph (mirrors examples/physics-engine/app/main.go)
+	// Build the target graph directly for this integration test.
 	mc := cpp.NewStaticLib("mathcore", builder, baseCfg).
 		PublicConfig(compiler.New().WithIncludeDir(filepath.Join(demoRoot, "mathcore", "include"))).
 		PrivateConfig(compiler.New().WithIncludeDir(filepath.Join(demoRoot, "mathcore", "src", "internal"))).
@@ -113,8 +113,8 @@ func TestFullDemoBuild(t *testing.T) {
 }
 
 // TestPhysicsEngineCleanRebuild proves nuke-engine can rebuild a complex C++ project
-// from scratch using the fluent Build() orchestration pattern.
-// It cleans the build dir, rebuilds via Build() chaining, and runs the app.
+// from scratch by constructing the target graph and running the project engine.
+// It cleans the build dir, rebuilds, and runs the app.
 func TestPhysicsEngineCleanRebuild(t *testing.T) {
 	tc, err := msvc.Discover()
 	if err != nil {
@@ -131,8 +131,7 @@ func TestPhysicsEngineCleanRebuild(t *testing.T) {
 	builder := cpp.NewBuilder(backend, buildDir)
 	baseCfg := compiler.New().WithStandard(compiler.Cpp20).WithBuildType(compiler.Debug)
 
-	// Call the physics-engine app's Build() orchestration chain
-	// This simulates what examples/physics-engine/app/main.go does
+	// Construct the physics-engine app graph explicitly for this test.
 	mc := mathcoreBuild(builder, baseCfg, demoRoot)
 	ph := physicsBuild(builder, baseCfg, demoRoot, mc)
 	rn := rendererBuild(builder, baseCfg, demoRoot, mc)
@@ -166,7 +165,7 @@ func TestPhysicsEngineCleanRebuild(t *testing.T) {
 	t.Logf("Successfully rebuilt app.exe from clean: %s (%d bytes)", exePath, stat.Size())
 }
 
-// Helper functions that mirror the nuke.go Build() pattern
+// Helper functions used by this integration test to construct the demo graph.
 func mathcoreBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot string) *target.Target[compiler.Config] {
 	dir := filepath.Join(demoRoot, "mathcore")
 	return cpp.NewStaticLib("mathcore", builder, baseCfg).
