@@ -8,8 +8,8 @@ import (
 	"github.com/bradphelan/nuke-engine/cpp"
 	"github.com/bradphelan/nuke-engine/target"
 
-	"demo/mathcore"
-	"demo/simulation"
+	"physics_engine/mathcore"
+	"physics_engine/simulation"
 )
 
 func Build(builder *cpp.CppBuilder, baseCfg compiler.Config, rootDir string) *target.Target[compiler.Config] {
