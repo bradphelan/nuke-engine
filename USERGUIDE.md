@@ -39,14 +39,14 @@ sequenceDiagram
     participant U as Developer
     participant NB as nuke-build
     participant Go as Go compiler
-    participant Builder as nuke-builder.exe
+    participant Builder as build.exe / build.out
     participant CC as C++ compiler
 
     U->>NB: nuke-build --project app/
     NB->>NB: read app/nuke.go\ndetermine import path
     NB->>Go: build/_nuke/main.go\n(generated bootstrap)
-    Go-->>NB: build/nuke-builder.exe
-    NB->>Builder: exec nuke-builder.exe
+    Go-->>NB: build/build.exe (Windows) or build/build.out (Linux)
+    NB->>Builder: exec build.exe / build.out [forwarded flags]
     Builder->>CC: compile/link (cache misses only)
     CC-->>Builder: .obj, .lib, .exe
     Builder-->>U: Stats + Built: path
@@ -230,15 +230,17 @@ By default outputs go to `<workspace-parent>/build/`:
 physics-engine/
 ├── app/
 ├── mathcore/
-└── build/           ← generated here
-    ├── _nuke/       ← ephemeral bootstrap (safe to delete)
+└── build/               ← generated here
+    ├── _nuke/           ← ephemeral bootstrap (safe to delete)
     │   ├── main.go
     │   ├── go.mod
     │   └── go.work
-    ├── obj/         ← compiled objects
-    ├── lib/         ← static/shared libraries
-    ├── bin/         ← executables
-    └── nuke.db      ← content-addressed cache
+    ├── build.exe        ← compiled builder (Windows)
+    ├── build.out        ← compiled builder (Linux/macOS)
+    ├── obj/             ← compiled objects
+    ├── lib/             ← static/shared libraries
+    ├── bin/             ← executables
+    └── nuke.db          ← content-addressed cache
 ```
 
 Override with `--build-dir`:
@@ -261,7 +263,16 @@ Flags:
   --build-dir <dir>  Output directory (default: <project-parent>/build)
   --version          Print version and exit
   -h / --help        Show this help
+
+Forwarded to build.exe / build.out:
+  --tree                    Print dependency tree and exit
+  --tree-graphvis           Print dependency DAG as Graphviz DOT and exit
+  --tree-graphviz           Alias for --tree-graphvis
+  --compile-commands        Write compile_commands.json and exit
+  --compile-commands.json   Alias for --compile-commands
 ```
+
+Any flag not recognised by `nuke-build` itself (`--project`, `--build-dir`, `--version`) is passed through verbatim to `build.exe` / `build.out`.
 
 ### Exit codes
 

@@ -4,7 +4,7 @@ A content-addressed, incremental C++ build system written in Go. Build rules are
 
 ```mermaid
 flowchart LR
-    A[nuke.go\nbuild rules] -->|nuke-build compiles| B[nuke-builder.exe]
+    A[nuke.go\nbuild rules] -->|nuke-build compiles| B[build.exe / build.out]
     B -->|runs| C[C++ compiler\nMSVC / clang / gcc]
     C --> D[.lib / .exe / .so]
     B -->|cache hit| D
@@ -14,7 +14,7 @@ flowchart LR
 
 - **Build rules are Go code.** A `nuke.go` file in your project declares targets using the nuke-engine API. No special syntax to learn.
 - **Content-addressed cache.** Outputs are fingerprinted by their inputs. A rebuild only runs rules whose inputs changed.
-- **Two-phase execution.** `nuke-build` first compiles your `nuke.go` into a self-contained `nuke-builder` binary, then runs it. The source tree is never modified.
+- **Two-phase execution.** `nuke-build` first compiles your `nuke.go` into a self-contained `build.exe` (Windows) / `build.out` (Linux/macOS) binary, then runs it. The source tree is never modified.
 - **Dependency discovery.** On MSVC the `/showIncludes` flag is used to record discovered headers; subsequent builds re-fingerprint them automatically.
 
 ## Docs

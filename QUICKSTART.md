@@ -107,8 +107,8 @@ Built: file:///.../myproject/build/bin/app.exe
 flowchart TD
     A["nuke-build --project app/"] --> B{find nuke.go}
     B --> C[write build/_nuke/main.go\nimports your Build func]
-    C --> D["go build → build/nuke-builder.exe"]
-    D --> E[nuke-builder.exe runs]
+    C --> D["go build → build/build.exe (Windows) / build/build.out (Linux)"]
+    D --> E[build.exe / build.out runs]
     E --> F{cache hit?}
     F -- yes --> G[skip rule]
     F -- no --> H[compile / link]

@@ -1,12 +1,12 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -99,31 +99,54 @@ func main() {
 `
 
 func main() {
-	projectDir := flag.String("project", "", "path to project directory containing nuke.go")
-	buildDir := flag.String("build-dir", "", "output directory (default: <project-parent>/build)")
-	showVersion := flag.Bool("version", false, "print version and exit")
-	treeFlag := flag.Bool("tree", false, "print dependency tree and exit (forwarded to nuke-builder)")
-	treeGraphvisFlag := flag.Bool("tree-graphvis", false, "print dependency DAG as Graphviz DOT and exit (forwarded)")
-	treeGraphvizFlag := flag.Bool("tree-graphviz", false, "alias for --tree-graphvis")
-	compileCommandsFlag := flag.Bool("compile-commands", false, "write compile_commands.json and exit (forwarded)")
-	compileCommandsJSONFlag := flag.Bool("compile-commands.json", false, "alias for --compile-commands")
-	flag.Parse()
+	// Manually parse only our own flags so that unrecognised flags are
+	// forwarded to build.exe / build.out rather than causing an error.
+	var projectDir, buildDir string
+	var showVersion bool
 
-	if *showVersion {
+	args := os.Args[1:]
+	for i := 0; i < len(args); i++ {
+		s := args[i]
+		name, val, hasEq := strings.Cut(strings.TrimLeft(s, "-"), "=")
+		switch name {
+		case "project":
+			if hasEq {
+				projectDir = val
+			} else if i+1 < len(args) {
+				projectDir = args[i+1]
+				i++
+			}
+		case "build-dir":
+			if hasEq {
+				buildDir = val
+			} else if i+1 < len(args) {
+				buildDir = args[i+1]
+				i++
+			}
+		case "version":
+			showVersion = true
+		case "h", "help":
+			fmt.Fprintln(os.Stderr, "Usage: nuke-build --project <dir> [--build-dir <dir>] [--version]")
+			fmt.Fprintln(os.Stderr, "All other flags are forwarded to build.exe / build.out.")
+			os.Exit(0)
+		}
+	}
+
+	if showVersion {
 		fmt.Println(version)
 		return
 	}
 
-	if *projectDir == "" {
+	if projectDir == "" {
 		log.Fatal("--project is required")
 	}
 
-	absProject, err := filepath.Abs(*projectDir)
+	absProject, err := filepath.Abs(projectDir)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	absBuild := *buildDir
+	absBuild := buildDir
 	if absBuild == "" {
 		absBuild = filepath.Join(filepath.Dir(absProject), "build")
 	} else {
@@ -190,8 +213,12 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Compile the bootstrap into nuke-builder.exe
-	builderExe := filepath.Join(absBuild, "nuke-builder.exe")
+	// Compile the bootstrap into build.exe (Windows) / build.out (Linux/macOS)
+	builderName := "build.exe"
+	if runtime.GOOS != "windows" {
+		builderName = "build.out"
+	}
+	builderExe := filepath.Join(absBuild, builderName)
 	build := exec.Command("go", "build", "-o", builderExe, ".")
 	build.Dir = stageDir
 	build.Stdout = os.Stdout
@@ -200,27 +227,36 @@ func main() {
 		log.Fatal("go build failed:", err)
 	}
 
-	// Run the builder — it uses nuke-engine to compile the C++ project
-	runArgs := []string{}
-	if *compileCommandsFlag || *compileCommandsJSONFlag {
-		runArgs = append(runArgs, "--compile-commands")
-	}
-	if *treeGraphvisFlag || *treeGraphvizFlag {
-		runArgs = append(runArgs, "--tree-graphvis")
-	}
-	if *treeFlag {
-		runArgs = append(runArgs, "--tree")
-	}
-	run := exec.Command(builderExe, runArgs...)
+	// Run the builder — forward all unrecognised flags transparently
+	run := exec.Command(builderExe, forwardedArgs()...)
 	run.Stdout = os.Stdout
 	run.Stderr = os.Stderr
 	if err := run.Run(); err != nil {
 		log.Fatal("builder failed:", err)
 	}
+}
 
-	if !*treeFlag {
-		fmt.Println("nuke-build: done")
+// forwardedArgs returns os.Args[1:] with nuke-build-specific flags removed.
+// Everything else is passed through verbatim to the builder binary.
+func forwardedArgs() []string {
+	var result []string
+	args := os.Args[1:]
+	for i := 0; i < len(args); i++ {
+		s := strings.TrimLeft(args[i], "-")
+		name, _, hasEq := strings.Cut(s, "=")
+		switch name {
+		case "project", "build-dir":
+			// Skip flag; if value is in the next arg, skip that too.
+			if !hasEq && i+1 < len(args) {
+				i++
+			}
+		case "version":
+			// Boolean; no following value.
+		default:
+			result = append(result, args[i])
+		}
 	}
+	return result
 }
 
 func readModuleName(dir string) string {
