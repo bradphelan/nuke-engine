@@ -142,8 +142,11 @@ func (r *SharedLibRule) ID() string { return r.id }
 
 func (r *SharedLibRule) Apply(ctx context.Context, inputs []artifact.Artifact) ([]artifact.Artifact, []artifact.Artifact, error) {
 	binDir := filepath.Join(r.buildDir, "bin")
+	libDir := filepath.Join(r.buildDir, "lib")
 	os.MkdirAll(binDir, 0755)
+	os.MkdirAll(libDir, 0755)
 	dllPath := filepath.Join(binDir, r.name+".dll")
+	impLibPath := filepath.Join(libDir, r.name+".lib")
 
 	var objPaths, libPaths []string
 	for _, a := range inputs {
@@ -156,6 +159,8 @@ func (r *SharedLibRule) Apply(ctx context.Context, inputs []artifact.Artifact) (
 	}
 
 	cmd, args, env := r.backend.SharedLibArgs(r.config, dllPath, objPaths, libPaths)
+	// Tell the linker to place the import library in the lib directory.
+	args = append(args, "/IMPLIB:"+impLibPath)
 	c := exec.CommandContext(ctx, cmd, args...)
 	c.Env = env
 
@@ -164,7 +169,9 @@ func (r *SharedLibRule) Apply(ctx context.Context, inputs []artifact.Artifact) (
 		return nil, nil, fmt.Errorf("shared lib failed:\n%s\n%w", string(out), err)
 	}
 
-	return []artifact.Artifact{artifact.NewFileArtifact(dllPath)}, nil, nil
+	// Return the import library as the primary artifact so downstream
+	// targets can link against it. The DLL is a side-effect on disk.
+	return []artifact.Artifact{artifact.NewFileArtifact(impLibPath)}, nil, nil
 }
 
 // ExeRule links input objects and libraries into an executable using a Backend.

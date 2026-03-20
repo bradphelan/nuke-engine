@@ -9,6 +9,10 @@ import (
 	"github.com/bradphelan/nuke-engine/target"
 )
 
+func Build(builder *cpp.CppBuilder, baseCfg compiler.Config, rootDir string) *target.Target[compiler.Config] {
+	return Target(builder, baseCfg, rootDir)
+}
+
 func Target(builder *cpp.CppBuilder, baseCfg compiler.Config, rootDir string) *target.Target[compiler.Config] {
 	dir := filepath.Join(rootDir, "mathcore")
 	return cpp.NewStaticLib("mathcore", builder, baseCfg).

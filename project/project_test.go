@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/bradphelan/nuke-engine/artifact"
@@ -13,18 +14,29 @@ import (
 // mockBackend satisfies compiler.Backend without needing real tools
 type mockBackend struct{}
 
+func mockCommandArgs(msg string) (string, []string) {
+	if runtime.GOOS == "windows" {
+		return "cmd", []string{"/c", "echo", msg}
+	}
+	return "sh", []string{"-c", "echo " + msg}
+}
+
 func (m *mockBackend) ID() string { return "mock:1.0" }
 func (m *mockBackend) CompileArgs(cfg compiler.Config, src, obj string) (string, []string, []string) {
-	return "echo", []string{"compiled"}, nil
+	cmd, args := mockCommandArgs("compiled")
+	return cmd, args, nil
 }
 func (m *mockBackend) StaticLibArgs(cfg compiler.Config, out string, objs []string) (string, []string, []string) {
-	return "echo", []string{"archived"}, nil
+	cmd, args := mockCommandArgs("archived")
+	return cmd, args, nil
 }
 func (m *mockBackend) SharedLibArgs(cfg compiler.Config, out string, objs, libs []string) (string, []string, []string) {
-	return "echo", []string{"linked-dll"}, nil
+	cmd, args := mockCommandArgs("linked-dll")
+	return cmd, args, nil
 }
 func (m *mockBackend) ExeArgs(cfg compiler.Config, out string, objs, libs []string) (string, []string, []string) {
-	return "echo", []string{"linked-exe"}, nil
+	cmd, args := mockCommandArgs("linked-exe")
+	return cmd, args, nil
 }
 func (m *mockBackend) ParseDiscoveredDeps(output string) []string { return nil }
 
