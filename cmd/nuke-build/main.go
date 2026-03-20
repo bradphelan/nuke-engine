@@ -28,26 +28,33 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
+	"github.com/bradphelan/nuke-engine/artifact"
 	"github.com/bradphelan/nuke-engine/compiler"
 	"github.com/bradphelan/nuke-engine/compiler/msvc"
 	"github.com/bradphelan/nuke-engine/cpp"
 	"github.com/bradphelan/nuke-engine/engine"
+	"github.com/bradphelan/nuke-engine/engine/tui"
 	"github.com/bradphelan/nuke-engine/project"
+	"github.com/bradphelan/nuke-engine/target"
 
 	app "IMPORT_PATH"
 )
 
 func main() {
-	tree := flag.Bool("tree", false, "print dependency tree and exit")
-	treeGraphvis := flag.Bool("tree-graphvis", false, "print dependency DAG as Graphviz DOT and exit")
-	treeGraphviz := flag.Bool("tree-graphviz", false, "alias for --tree-graphvis")
-	compileCommands := flag.Bool("compile-commands", false, "write compile_commands.json and exit")
+	cliFlag          := flag.Bool("cli",               false, "interactive TUI mode")
+	cleanFlag        := flag.Bool("clean",             false, "clean build outputs and exit")
+	tree             := flag.Bool("tree",              false, "print dependency tree and exit")
+	treeGraphvis     := flag.Bool("tree-graphvis",     false, "print dependency DAG as Graphviz DOT and exit")
+	treeGraphviz     := flag.Bool("tree-graphviz",     false, "alias for --tree-graphvis")
+	compileCommands  := flag.Bool("compile-commands",  false, "write compile_commands.json and exit")
 	compileCommandsJSON := flag.Bool("compile-commands.json", false, "alias for --compile-commands")
 	flag.Parse()
 
-	rootDir := ROOT_DIR
+	rootDir  := ROOT_DIR
 	buildDir := filepath.Dir(rootDir) + "/build"
 
 	tc, err := msvc.Discover()
@@ -59,11 +66,89 @@ func main() {
 	builder := cpp.NewBuilder(backend, buildDir)
 	baseCfg := compiler.New().WithStandard(compiler.Cpp20).WithBuildType(compiler.Debug)
 
-	t := app.Build(builder, baseCfg, rootDir)
+	targets := app.Build(builder, baseCfg, rootDir)
 
+	// Union of all target artifact sets; used for non-CLI single-shot operations.
+	var combined artifact.ArtifactSet
+	for _, t := range targets {
+		if combined == nil {
+			combined = t.ArtifactSet()
+		} else {
+			combined = combined.Add(t.ArtifactSet())
+		}
+	}
+
+	// ── Interactive TUI mode ─────────────────────────────────────────────────
+	if *cliFlag {
+		entries := make([]*tui.TargetEntry, len(targets))
+		for i, t := range targets {
+			entries[i] = &tui.TargetEntry{Name: t.Name(), IsExe: t.Kind() == target.Executable}
+		}
+		for {
+			sel, tuiErr := tui.Run(entries)
+			if tuiErr != nil {
+				log.Fatal("TUI error:", tuiErr)
+			}
+			if sel == nil {
+				return
+			}
+			t := targets[sel.Index]
+			set := t.ArtifactSet()
+			switch sel.Action {
+			case "build":
+				p, openErr := project.Open(buildDir, backend, baseCfg)
+				if openErr != nil {
+					fmt.Fprintln(os.Stderr, "open project:", openErr)
+					continue
+				}
+				result, stats, buildErr := p.BuildWithStats(context.Background(), set)
+				p.Close()
+				if buildErr != nil {
+					fmt.Fprintf(os.Stderr, "Build failed: %v\n", buildErr)
+				} else {
+					fmt.Printf("cache_hits=%d misses=%d executed=%d\n",
+						stats.CacheHits, stats.CacheMisses, stats.RulesExecuted)
+					for _, a := range result {
+						fmt.Printf("Built: %s\n", a.URI())
+					}
+				}
+			case "clean":
+				engine.CleanArtifactSet(set)
+				fmt.Printf("Cleaned: %s\n", t.Name())
+			case "tree":
+				engine.PrintTree(os.Stdout, set)
+			case "tree-graphviz":
+				engine.PrintTreeGraphviz(os.Stdout, set)
+			case "run":
+				p, openErr := project.Open(buildDir, backend, baseCfg)
+				if openErr != nil {
+					fmt.Fprintln(os.Stderr, "open project:", openErr)
+					continue
+				}
+				result, _, buildErr := p.BuildWithStats(context.Background(), set)
+				p.Close()
+				if buildErr != nil {
+					fmt.Fprintf(os.Stderr, "Build failed: %v\n", buildErr)
+					continue
+				}
+				if len(result) > 0 {
+					exePath := strings.TrimPrefix(result[0].URI(), "file://")
+					cmd := exec.Command(exePath)
+					cmd.Stdout = os.Stdout
+					cmd.Stderr = os.Stderr
+					cmd.Stdin = os.Stdin
+					if runErr := cmd.Run(); runErr != nil {
+						fmt.Fprintf(os.Stderr, "Run: %v\n", runErr)
+					}
+				}
+			}
+		}
+	}
+
+	// ── Single-shot flag modes ───────────────────────────────────────────────
 	if *compileCommands || *compileCommandsJSON {
 		outPath := filepath.Join(rootDir, "compile_commands.json")
-		if err := engine.WriteCompileCommandsJSON(outPath, t.ArtifactSet()); err != nil {
+		if err := engine.WriteCompileCommandsJSON(outPath, combined); err != nil {
 			log.Fatal("compile_commands generation failed:", err)
 		}
 		fmt.Printf("Wrote: %s\n", filepath.ToSlash(outPath))
@@ -71,22 +156,29 @@ func main() {
 	}
 
 	if *treeGraphvis || *treeGraphviz {
-		engine.PrintTreeGraphviz(os.Stdout, t.ArtifactSet())
+		engine.PrintTreeGraphviz(os.Stdout, combined)
 		return
 	}
 
 	if *tree {
-		engine.PrintTree(os.Stdout, t.ArtifactSet())
+		engine.PrintTree(os.Stdout, combined)
 		return
 	}
 
+	if *cleanFlag {
+		engine.CleanArtifactSet(combined)
+		fmt.Println("Cleaned all targets.")
+		return
+	}
+
+	// ── Default: build everything ────────────────────────────────────────────
 	p, err := project.Open(buildDir, backend, baseCfg)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer p.Close()
 
-	result, stats, err := p.BuildWithStats(context.Background(), t.ArtifactSet())
+	result, stats, err := p.BuildWithStats(context.Background(), combined)
 	if err != nil {
 		log.Fatal("Build failed:", err)
 	}
@@ -98,8 +190,9 @@ func main() {
 	} else {
 		fmt.Printf("Tasks executed: %d\n", stats.RulesExecuted)
 	}
-
-	fmt.Printf("Built: %s\n", result[0].URI())
+	for _, a := range result {
+		fmt.Printf("Built: %s\n", a.URI())
+	}
 }
 `
 
