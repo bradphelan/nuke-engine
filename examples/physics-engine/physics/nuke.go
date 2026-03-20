@@ -11,15 +11,12 @@ import (
 	"physics_engine/mathcore"
 )
 
-func Build(builder *cpp.CppBuilder, baseCfg compiler.Config, rootDir string) *target.Target[compiler.Config] {
-	mc := mathcore.Build(builder, baseCfg, rootDir)
-	return Target(builder, baseCfg, rootDir, mc)
-}
-
-func Target(builder *cpp.CppBuilder, baseCfg compiler.Config, rootDir string, mc *target.Target[compiler.Config]) *target.Target[compiler.Config] {
-	dir := filepath.Join(rootDir, "physics")
-	return cpp.NewStaticLib("physics", builder, baseCfg).
-		PublicConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "include"))).
-		LinkPublic(mc).
-		Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
+func Target(ctx *cpp.Context) *target.Target[compiler.Config] {
+	return ctx.Once("physics", func() *target.Target[compiler.Config] {
+		dir := filepath.Join(ctx.RootDir, "physics")
+		return cpp.NewStaticLib("physics", ctx.Builder, ctx.Config).
+			PublicConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "include"))).
+			LinkPublic(mathcore.Target(ctx)).
+			Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
+	})
 }

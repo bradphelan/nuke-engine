@@ -66,7 +66,8 @@ func main() {
 	builder := cpp.NewBuilder(backend, buildDir)
 	baseCfg := compiler.New().WithStandard(compiler.Cpp20).WithBuildType(compiler.Debug)
 
-	targets := app.Build(builder, baseCfg, rootDir)
+	ctx := cpp.NewContext(builder, baseCfg, rootDir)
+	targets := app.Build(ctx)
 
 	// Union of all target artifact sets; used for non-CLI single-shot operations.
 	var combined artifact.ArtifactSet

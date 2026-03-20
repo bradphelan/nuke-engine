@@ -12,17 +12,13 @@ import (
 	"physics_engine/renderer"
 )
 
-func Build(builder *cpp.CppBuilder, baseCfg compiler.Config, rootDir string) *target.Target[compiler.Config] {
-	ph := physics.Build(builder, baseCfg, rootDir)
-	rn := renderer.Build(builder, baseCfg, rootDir)
-	return Target(builder, baseCfg, rootDir, ph, rn)
-}
-
-func Target(builder *cpp.CppBuilder, baseCfg compiler.Config, rootDir string, ph, rn *target.Target[compiler.Config]) *target.Target[compiler.Config] {
-	dir := filepath.Join(rootDir, "simulation")
-	return cpp.NewSharedLib("simulation", builder, baseCfg).
-		PublicConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "include")).WithDefine("SIMULATION_EXPORTS")).
-		LinkPrivate(ph).
-		LinkPrivate(rn).
-		Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
+func Target(ctx *cpp.Context) *target.Target[compiler.Config] {
+	return ctx.Once("simulation", func() *target.Target[compiler.Config] {
+		dir := filepath.Join(ctx.RootDir, "simulation")
+		return cpp.NewSharedLib("simulation", ctx.Builder, ctx.Config).
+			PublicConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "include")).WithDefine("SIMULATION_EXPORTS")).
+			LinkPrivate(physics.Target(ctx)).
+			LinkPrivate(renderer.Target(ctx)).
+			Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
+	})
 }

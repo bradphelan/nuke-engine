@@ -11,15 +11,12 @@ import (
 	"physics_engine/mathcore"
 )
 
-func Build(builder *cpp.CppBuilder, baseCfg compiler.Config, rootDir string) *target.Target[compiler.Config] {
-	mc := mathcore.Build(builder, baseCfg, rootDir)
-	return Target(builder, baseCfg, rootDir, mc)
-}
-
-func Target(builder *cpp.CppBuilder, baseCfg compiler.Config, rootDir string, mc *target.Target[compiler.Config]) *target.Target[compiler.Config] {
-	dir := filepath.Join(rootDir, "renderer")
-	return cpp.NewSharedLib("renderer", builder, baseCfg).
-		PublicConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "include")).WithDefine("RENDERER_EXPORTS")).
-		LinkPublic(mc).
-		Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
+func Target(ctx *cpp.Context) *target.Target[compiler.Config] {
+	return ctx.Once("renderer", func() *target.Target[compiler.Config] {
+		dir := filepath.Join(ctx.RootDir, "renderer")
+		return cpp.NewSharedLib("renderer", ctx.Builder, ctx.Config).
+			PublicConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "include")).WithDefine("RENDERER_EXPORTS")).
+			LinkPublic(mathcore.Target(ctx)).
+			Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
+	})
 }

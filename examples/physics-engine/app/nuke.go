@@ -14,21 +14,24 @@ import (
 	"physics_engine/simulation"
 )
 
-// Build returns all top-level targets so that nuke-build can present them in
-// the interactive TUI and build them individually or as a group.
-func Build(builder *cpp.CppBuilder, baseCfg compiler.Config, rootDir string) []*target.Target[compiler.Config] {
-	mc := mathcore.Build(builder, baseCfg, rootDir)
-	ph := physics.Build(builder, baseCfg, rootDir)
-	rn := renderer.Build(builder, baseCfg, rootDir)
-	sm := simulation.Build(builder, baseCfg, rootDir)
-	app := AppTarget(builder, baseCfg, rootDir, mc, sm)
-	return []*target.Target[compiler.Config]{app, mc, ph, rn, sm}
+func Target(ctx *cpp.Context) *target.Target[compiler.Config] {
+	return ctx.Once("app", func() *target.Target[compiler.Config] {
+		dir := filepath.Join(ctx.RootDir, "app")
+		return cpp.NewExe("app", ctx.Builder, ctx.Config).
+			LinkPublic(mathcore.Target(ctx)).
+			LinkPrivate(simulation.Target(ctx)).
+			Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
+	})
 }
 
-func AppTarget(builder *cpp.CppBuilder, baseCfg compiler.Config, rootDir string, mc, sm *target.Target[compiler.Config]) *target.Target[compiler.Config] {
-	dir := filepath.Join(rootDir, "app")
-	return cpp.NewExe("app", builder, baseCfg).
-		LinkPublic(mc).
-		LinkPrivate(sm).
-		Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
+// Build returns all targets for TUI enumeration. The DAG self-assembles via
+// ctx.Once so each target is constructed exactly once regardless of call order.
+func Build(ctx *cpp.Context) []*target.Target[compiler.Config] {
+	return []*target.Target[compiler.Config]{
+		Target(ctx),
+		mathcore.Target(ctx),
+		physics.Target(ctx),
+		renderer.Target(ctx),
+		simulation.Target(ctx),
+	}
 }
