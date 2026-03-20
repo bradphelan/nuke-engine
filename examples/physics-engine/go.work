@@ -6,4 +6,5 @@ use (
 	./renderer
 	./simulation
 	./app
+	../..
 )

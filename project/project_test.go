@@ -46,8 +46,12 @@ func TestProjectAccessors(t *testing.T) {
 	mb := &mockBackend{}
 	p, _ := Open(filepath.Join(dir, "build"), mb, cfg)
 	defer p.Close()
-	if p.Config().Standard() != compiler.Cpp20 { t.Fatal("config") }
-	if p.Backend().ID() != "mock:1.0" { t.Fatal("backend") }
+	if p.Config().Standard() != compiler.Cpp20 {
+		t.Fatal("config")
+	}
+	if p.Backend().ID() != "mock:1.0" {
+		t.Fatal("backend")
+	}
 }
 
 func TestProjectBuildDir(t *testing.T) {
