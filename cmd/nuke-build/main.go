@@ -10,6 +10,9 @@ import (
 	"strings"
 )
 
+// version is set at build time via -ldflags="-X main.version=..."
+var version = "dev"
+
 // generatedBootstrap is written to build/_nuke/main.go.
 // It imports the project's top-level nuke.go package and calls Build().
 const generatedBootstrap = `package main
@@ -49,9 +52,17 @@ func main() {
 	}
 	defer p.Close()
 
-	result, err := p.Build(context.Background(), t.ArtifactSet())
+	result, stats, err := p.BuildWithStats(context.Background(), t.ArtifactSet())
 	if err != nil {
 		log.Fatal("Build failed:", err)
+	}
+
+	fmt.Printf("Stats: cache_hits=%d cache_misses=%d rules_executed=%d outputs=%d\n",
+		stats.CacheHits, stats.CacheMisses, stats.RulesExecuted, len(result))
+	if stats.RulesExecuted == 0 {
+		fmt.Println("No tasks need running (up-to-date).")
+	} else {
+		fmt.Printf("Tasks executed: %d\n", stats.RulesExecuted)
 	}
 
 	fmt.Printf("Built: %s\n", result[0].URI())
@@ -61,7 +72,13 @@ func main() {
 func main() {
 	projectDir := flag.String("project", "", "path to project directory containing nuke.go")
 	buildDir := flag.String("build-dir", "", "output directory (default: <project-parent>/build)")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(version)
+		return
+	}
 
 	if *projectDir == "" {
 		log.Fatal("--project is required")

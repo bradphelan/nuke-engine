@@ -28,12 +28,15 @@ func (s *SliceSet) Resolve(_ context.Context) ([]Artifact, error) { return s.ite
 func (s *SliceSet) Fingerprint(ctx context.Context) (string, error) {
 	return setFingerprint(ctx, s)
 }
-func (s *SliceSet) Add(other ArtifactSet) ArtifactSet   { return &UnionSet{left: s, right: other} }
-func (s *SliceSet) Sub(other ArtifactSet) ArtifactSet   { return &DiffSet{left: s, right: other} }
-func (s *SliceSet) Filter(pattern string) ArtifactSet   { return &FilterSet{source: s, pattern: pattern} }
+func (s *SliceSet) Add(other ArtifactSet) ArtifactSet { return &UnionSet{left: s, right: other} }
+func (s *SliceSet) Sub(other ArtifactSet) ArtifactSet { return &DiffSet{left: s, right: other} }
+func (s *SliceSet) Filter(pattern string) ArtifactSet { return &FilterSet{source: s, pattern: pattern} }
 
 // --- UnionSet ---
 type UnionSet struct{ left, right ArtifactSet }
+
+func (u *UnionSet) Left() ArtifactSet  { return u.left }
+func (u *UnionSet) Right() ArtifactSet { return u.right }
 
 func (u *UnionSet) Resolve(ctx context.Context) ([]Artifact, error) {
 	l, err := u.left.Resolve(ctx)
@@ -61,12 +64,15 @@ func (u *UnionSet) Resolve(ctx context.Context) ([]Artifact, error) {
 	return out, nil
 }
 func (u *UnionSet) Fingerprint(ctx context.Context) (string, error) { return setFingerprint(ctx, u) }
-func (u *UnionSet) Add(other ArtifactSet) ArtifactSet   { return &UnionSet{left: u, right: other} }
-func (u *UnionSet) Sub(other ArtifactSet) ArtifactSet   { return &DiffSet{left: u, right: other} }
-func (u *UnionSet) Filter(pattern string) ArtifactSet   { return &FilterSet{source: u, pattern: pattern} }
+func (u *UnionSet) Add(other ArtifactSet) ArtifactSet               { return &UnionSet{left: u, right: other} }
+func (u *UnionSet) Sub(other ArtifactSet) ArtifactSet               { return &DiffSet{left: u, right: other} }
+func (u *UnionSet) Filter(pattern string) ArtifactSet               { return &FilterSet{source: u, pattern: pattern} }
 
 // --- DiffSet ---
 type DiffSet struct{ left, right ArtifactSet }
+
+func (d *DiffSet) Left() ArtifactSet  { return d.left }
+func (d *DiffSet) Right() ArtifactSet { return d.right }
 
 func (d *DiffSet) Resolve(ctx context.Context) ([]Artifact, error) {
 	l, err := d.left.Resolve(ctx)
@@ -90,15 +96,18 @@ func (d *DiffSet) Resolve(ctx context.Context) ([]Artifact, error) {
 	return out, nil
 }
 func (d *DiffSet) Fingerprint(ctx context.Context) (string, error) { return setFingerprint(ctx, d) }
-func (d *DiffSet) Add(other ArtifactSet) ArtifactSet   { return &UnionSet{left: d, right: other} }
-func (d *DiffSet) Sub(other ArtifactSet) ArtifactSet   { return &DiffSet{left: d, right: other} }
-func (d *DiffSet) Filter(pattern string) ArtifactSet   { return &FilterSet{source: d, pattern: pattern} }
+func (d *DiffSet) Add(other ArtifactSet) ArtifactSet               { return &UnionSet{left: d, right: other} }
+func (d *DiffSet) Sub(other ArtifactSet) ArtifactSet               { return &DiffSet{left: d, right: other} }
+func (d *DiffSet) Filter(pattern string) ArtifactSet               { return &FilterSet{source: d, pattern: pattern} }
 
 // --- FilterSet ---
 type FilterSet struct {
 	source  ArtifactSet
 	pattern string
 }
+
+func (f *FilterSet) Source() ArtifactSet { return f.source }
+func (f *FilterSet) Pattern() string     { return f.pattern }
 
 func (f *FilterSet) Resolve(ctx context.Context) ([]Artifact, error) {
 	arts, err := f.source.Resolve(ctx)
@@ -115,9 +124,11 @@ func (f *FilterSet) Resolve(ctx context.Context) ([]Artifact, error) {
 	return out, nil
 }
 func (f *FilterSet) Fingerprint(ctx context.Context) (string, error) { return setFingerprint(ctx, f) }
-func (f *FilterSet) Add(other ArtifactSet) ArtifactSet   { return &UnionSet{left: f, right: other} }
-func (f *FilterSet) Sub(other ArtifactSet) ArtifactSet   { return &DiffSet{left: f, right: other} }
-func (f *FilterSet) Filter(pattern string) ArtifactSet   { return &FilterSet{source: f, pattern: pattern} }
+func (f *FilterSet) Add(other ArtifactSet) ArtifactSet               { return &UnionSet{left: f, right: other} }
+func (f *FilterSet) Sub(other ArtifactSet) ArtifactSet               { return &DiffSet{left: f, right: other} }
+func (f *FilterSet) Filter(pattern string) ArtifactSet {
+	return &FilterSet{source: f, pattern: pattern}
+}
 
 // shared helper
 func setFingerprint(ctx context.Context, s ArtifactSet) (string, error) {

@@ -44,6 +44,11 @@ func (p *Project) Build(ctx context.Context, target artifact.ArtifactSet) ([]art
 	return p.engine.Resolve(ctx, target)
 }
 
+func (p *Project) BuildWithStats(ctx context.Context, target artifact.ArtifactSet) ([]artifact.Artifact, engine.BuildStats, error) {
+	out, err := p.engine.Resolve(ctx, target)
+	return out, p.engine.Stats(), err
+}
+
 func (p *Project) BuildDir() string { return p.buildDir }
 
 // --- Fluent target builders ---
