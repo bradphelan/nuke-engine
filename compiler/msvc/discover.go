@@ -72,12 +72,33 @@ func Discover() (*Toolchain, error) {
 // INCLUDE, LIB, and PATH (with the tool bin dir prepended).
 func (tc *Toolchain) Environ() []string {
 	binDir := filepath.Dir(tc.CL)
-	path := binDir + ";" + os.Getenv("PATH")
-	return []string{
-		"INCLUDE=" + strings.Join(tc.IncludeDirs, ";"),
-		"LIB=" + strings.Join(tc.LibDirs, ";"),
-		"PATH=" + path,
+
+	// Start with the current process environment so critical variables
+	// (SystemRoot, TMP, TEMP, etc.) are preserved.
+	overrides := map[string]string{
+		"INCLUDE": strings.Join(tc.IncludeDirs, ";"),
+		"LIB":     strings.Join(tc.LibDirs, ";"),
+		"PATH":    binDir + ";" + os.Getenv("PATH"),
 	}
+
+	var env []string
+	seen := make(map[string]bool)
+	for _, e := range os.Environ() {
+		key, _, _ := strings.Cut(e, "=")
+		upper := strings.ToUpper(key)
+		if v, ok := overrides[upper]; ok {
+			env = append(env, upper+"="+v)
+			seen[upper] = true
+		} else {
+			env = append(env, e)
+		}
+	}
+	for k, v := range overrides {
+		if !seen[k] {
+			env = append(env, k+"="+v)
+		}
+	}
+	return env
 }
 
 // findVSInstallPath runs vswhere.exe to locate the latest Visual Studio installation.
