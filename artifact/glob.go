@@ -37,6 +37,9 @@ func (g *GlobSet) Resolve(_ context.Context) ([]Artifact, error) {
 	return arts, err
 }
 
+func (g *GlobSet) BaseDir() string { return g.baseDir }
+func (g *GlobSet) GlobPattern() string { return g.pattern }
+
 func (g *GlobSet) Fingerprint(ctx context.Context) (string, error) { return setFingerprint(ctx, g) }
 func (g *GlobSet) Add(other ArtifactSet) ArtifactSet               { return &UnionSet{left: g, right: other} }
 func (g *GlobSet) Sub(other ArtifactSet) ArtifactSet               { return &DiffSet{left: g, right: other} }

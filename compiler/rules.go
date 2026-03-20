@@ -10,6 +10,7 @@ import (
 
 	"github.com/bradphelan/nuke-engine/artifact"
 	"github.com/bradphelan/nuke-engine/fingerprint"
+	"github.com/bradphelan/nuke-engine/rule"
 )
 
 // URIToPath strips the "file://" prefix and converts slashes to native path separators.
@@ -38,7 +39,39 @@ func NewCompileRule(b Backend, cfg Config, name, buildDir string) *CompileRule {
 	}
 }
 
-func (r *CompileRule) ID() string { return r.id }
+func (r *CompileRule) ID() string   { return r.id }
+func (r *CompileRule) Name() string { return "compile:" + r.name }
+func (r *CompileRule) PredictedOutputURIs() []string {
+	return []string{"file://" + filepath.ToSlash(filepath.Join(r.buildDir, "obj", r.name, "*.obj"))}
+}
+func (r *CompileRule) PredictedOutputURIsForInputs(inputs []artifact.Artifact) []string {
+	out := make([]string, 0, len(inputs))
+	for _, input := range inputs {
+		srcPath := URIToPath(input.URI())
+		stem := strings.TrimSuffix(filepath.Base(srcPath), filepath.Ext(srcPath))
+		objPath := filepath.Join(r.buildDir, "obj", r.name, stem+".obj")
+		out = append(out, "file://"+filepath.ToSlash(objPath))
+	}
+	return out
+}
+
+func (r *CompileRule) CompileCommands(inputs []artifact.Artifact) []rule.CompileCommand {
+	out := make([]rule.CompileCommand, 0, len(inputs))
+	for _, input := range inputs {
+		srcPath := URIToPath(input.URI())
+		stem := strings.TrimSuffix(filepath.Base(srcPath), filepath.Ext(srcPath))
+		objPath := filepath.Join(r.buildDir, "obj", r.name, stem+".obj")
+
+		cmd, args, _ := r.backend.CompileArgs(r.config, srcPath, objPath)
+		argv := append([]string{cmd}, args...)
+		out = append(out, rule.CompileCommand{
+			Directory: filepath.ToSlash(filepath.Dir(srcPath)),
+			Command:   joinCommand(argv),
+			File:      filepath.ToSlash(srcPath),
+		})
+	}
+	return out
+}
 
 func (r *CompileRule) Apply(ctx context.Context, inputs []artifact.Artifact) ([]artifact.Artifact, []artifact.Artifact, error) {
 	objDir := filepath.Join(r.buildDir, "obj", r.name)
@@ -74,6 +107,27 @@ func (r *CompileRule) Apply(ctx context.Context, inputs []artifact.Artifact) ([]
 	return outputs, discovered, nil
 }
 
+func joinCommand(argv []string) string {
+	if len(argv) == 0 {
+		return ""
+	}
+	parts := make([]string, len(argv))
+	for i, a := range argv {
+		parts[i] = shellQuote(a)
+	}
+	return strings.Join(parts, " ")
+}
+
+func shellQuote(s string) string {
+	if s == "" {
+		return "\"\""
+	}
+	if !strings.ContainsAny(s, " \t\n\r\"") {
+		return s
+	}
+	return "\"" + strings.ReplaceAll(s, "\"", "\\\"") + "\""
+}
+
 // StaticLibRule archives input object files into a static library using a Backend.
 type StaticLibRule struct {
 	backend  Backend
@@ -94,7 +148,11 @@ func NewStaticLibRule(b Backend, cfg Config, name, buildDir string) *StaticLibRu
 	}
 }
 
-func (r *StaticLibRule) ID() string { return r.id }
+func (r *StaticLibRule) ID() string   { return r.id }
+func (r *StaticLibRule) Name() string { return "staticlib:" + r.name }
+func (r *StaticLibRule) PredictedOutputURIs() []string {
+	return []string{"file://" + filepath.ToSlash(filepath.Join(r.buildDir, "lib", r.name+".lib"))}
+}
 
 func (r *StaticLibRule) Apply(ctx context.Context, inputs []artifact.Artifact) ([]artifact.Artifact, []artifact.Artifact, error) {
 	libDir := filepath.Join(r.buildDir, "lib")
@@ -138,7 +196,12 @@ func NewSharedLibRule(b Backend, cfg Config, name, buildDir string) *SharedLibRu
 	}
 }
 
-func (r *SharedLibRule) ID() string { return r.id }
+func (r *SharedLibRule) ID() string   { return r.id }
+func (r *SharedLibRule) Name() string { return "sharedlib:" + r.name }
+func (r *SharedLibRule) PredictedOutputURIs() []string {
+	// Downstream link steps depend on the import library. The DLL is a side effect.
+	return []string{"file://" + filepath.ToSlash(filepath.Join(r.buildDir, "lib", r.name+".lib"))}
+}
 
 func (r *SharedLibRule) Apply(ctx context.Context, inputs []artifact.Artifact) ([]artifact.Artifact, []artifact.Artifact, error) {
 	binDir := filepath.Join(r.buildDir, "bin")
@@ -194,7 +257,11 @@ func NewExeRule(b Backend, cfg Config, name, buildDir string) *ExeRule {
 	}
 }
 
-func (r *ExeRule) ID() string { return r.id }
+func (r *ExeRule) ID() string   { return r.id }
+func (r *ExeRule) Name() string { return "exe:" + r.name }
+func (r *ExeRule) PredictedOutputURIs() []string {
+	return []string{"file://" + filepath.ToSlash(filepath.Join(r.buildDir, "bin", r.name+".exe"))}
+}
 
 func (r *ExeRule) Apply(ctx context.Context, inputs []artifact.Artifact) ([]artifact.Artifact, []artifact.Artifact, error) {
 	binDir := filepath.Join(r.buildDir, "bin")

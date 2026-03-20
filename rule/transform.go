@@ -20,6 +20,15 @@ func NewTransformSet(inputs artifact.ArtifactSet, r Rule) *TransformSet {
 	return &TransformSet{inputs: inputs, rule: r}
 }
 
+// Inputs returns the upstream ArtifactSet this rule reads from.
+func (t *TransformSet) Inputs() artifact.ArtifactSet { return t.inputs }
+
+// RuleID returns the identifier of the rule applied by this node.
+func (t *TransformSet) RuleID() string { return t.rule.ID() }
+
+// Rule returns the Rule applied by this TransformSet.
+func (t *TransformSet) Rule() Rule { return t.rule }
+
 // Resolve resolves the input set, applies the rule, stores discovered dependencies,
 // and returns the output artifacts.
 func (t *TransformSet) Resolve(ctx context.Context) ([]artifact.Artifact, error) {
@@ -47,12 +56,6 @@ func (t *TransformSet) Fingerprint(ctx context.Context) (string, error) {
 	}
 	return fingerprint.MerkleRoot(fps), nil
 }
-
-// Inputs returns the upstream ArtifactSet.
-func (t *TransformSet) Inputs() artifact.ArtifactSet { return t.inputs }
-
-// Rule returns the Rule applied by this TransformSet.
-func (t *TransformSet) Rule() Rule { return t.rule }
 
 // Discovered returns the sidecar dependency artifacts found during the last Resolve call.
 func (t *TransformSet) Discovered() []artifact.Artifact { return t.lastDiscovered }

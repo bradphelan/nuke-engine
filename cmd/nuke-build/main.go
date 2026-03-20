@@ -19,19 +19,29 @@ const generatedBootstrap = `package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 
 	"github.com/bradphelan/nuke-engine/compiler"
 	"github.com/bradphelan/nuke-engine/compiler/msvc"
 	"github.com/bradphelan/nuke-engine/cpp"
+	"github.com/bradphelan/nuke-engine/engine"
 	"github.com/bradphelan/nuke-engine/project"
 
 	app "IMPORT_PATH"
 )
 
 func main() {
+	tree := flag.Bool("tree", false, "print dependency tree and exit")
+	treeGraphvis := flag.Bool("tree-graphvis", false, "print dependency DAG as Graphviz DOT and exit")
+	treeGraphviz := flag.Bool("tree-graphviz", false, "alias for --tree-graphvis")
+	compileCommands := flag.Bool("compile-commands", false, "write compile_commands.json and exit")
+	compileCommandsJSON := flag.Bool("compile-commands.json", false, "alias for --compile-commands")
+	flag.Parse()
+
 	rootDir := ROOT_DIR
 	buildDir := filepath.Dir(rootDir) + "/build"
 
@@ -45,6 +55,25 @@ func main() {
 	baseCfg := compiler.New().WithStandard(compiler.Cpp20).WithBuildType(compiler.Debug)
 
 	t := app.Build(builder, baseCfg, rootDir)
+
+	if *compileCommands || *compileCommandsJSON {
+		outPath := filepath.Join(rootDir, "compile_commands.json")
+		if err := engine.WriteCompileCommandsJSON(outPath, t.ArtifactSet()); err != nil {
+			log.Fatal("compile_commands generation failed:", err)
+		}
+		fmt.Printf("Wrote: %s\n", filepath.ToSlash(outPath))
+		return
+	}
+
+	if *treeGraphvis || *treeGraphviz {
+		engine.PrintTreeGraphviz(os.Stdout, t.ArtifactSet())
+		return
+	}
+
+	if *tree {
+		engine.PrintTree(os.Stdout, t.ArtifactSet())
+		return
+	}
 
 	p, err := project.Open(buildDir, backend, baseCfg)
 	if err != nil {
@@ -73,6 +102,11 @@ func main() {
 	projectDir := flag.String("project", "", "path to project directory containing nuke.go")
 	buildDir := flag.String("build-dir", "", "output directory (default: <project-parent>/build)")
 	showVersion := flag.Bool("version", false, "print version and exit")
+	treeFlag := flag.Bool("tree", false, "print dependency tree and exit (forwarded to nuke-builder)")
+	treeGraphvisFlag := flag.Bool("tree-graphvis", false, "print dependency DAG as Graphviz DOT and exit (forwarded)")
+	treeGraphvizFlag := flag.Bool("tree-graphviz", false, "alias for --tree-graphvis")
+	compileCommandsFlag := flag.Bool("compile-commands", false, "write compile_commands.json and exit (forwarded)")
+	compileCommandsJSONFlag := flag.Bool("compile-commands.json", false, "alias for --compile-commands")
 	flag.Parse()
 
 	if *showVersion {
@@ -149,8 +183,6 @@ func main() {
 	// Write the bootstrap main.go, substituting import path and rootDir
 	bootstrap := strings.ReplaceAll(generatedBootstrap, "IMPORT_PATH", projectModName)
 	bootstrap = strings.ReplaceAll(bootstrap, "ROOT_DIR", fmt.Sprintf("%q", filepath.ToSlash(rootDir)))
-	// Remove the unused filepath import if rootDir is hardcoded
-	bootstrap = strings.ReplaceAll(bootstrap, "\t\"path/filepath\"\n", "")
 	bootstrap = strings.ReplaceAll(bootstrap,
 		`buildDir := filepath.Dir(rootDir) + "/build"`,
 		fmt.Sprintf("buildDir := %q", filepath.ToSlash(absBuild)))
@@ -169,14 +201,26 @@ func main() {
 	}
 
 	// Run the builder — it uses nuke-engine to compile the C++ project
-	run := exec.Command(builderExe)
+	runArgs := []string{}
+	if *compileCommandsFlag || *compileCommandsJSONFlag {
+		runArgs = append(runArgs, "--compile-commands")
+	}
+	if *treeGraphvisFlag || *treeGraphvizFlag {
+		runArgs = append(runArgs, "--tree-graphvis")
+	}
+	if *treeFlag {
+		runArgs = append(runArgs, "--tree")
+	}
+	run := exec.Command(builderExe, runArgs...)
 	run.Stdout = os.Stdout
 	run.Stderr = os.Stderr
 	if err := run.Run(); err != nil {
 		log.Fatal("builder failed:", err)
 	}
 
-	fmt.Println("nuke-build: done")
+	if !*treeFlag {
+		fmt.Println("nuke-build: done")
+	}
 }
 
 func readModuleName(dir string) string {
