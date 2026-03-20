@@ -68,3 +68,13 @@ func (c Config) ExportAllSymbols(b bool) Config {
 	c.exportSymbols = b
 	return c
 }
+
+// Merge returns a new Config with all properties from other appended/applied on top of c.
+func (c Config) Merge(other Config) Config {
+	for _, d := range other.defines     { c = c.WithDefine(d) }
+	for _, d := range other.includeDirs { c = c.WithIncludeDir(d) }
+	for _, f := range other.rawCFlags   { c = c.WithCFlags(f) }
+	for _, f := range other.rawLDFlags  { c = c.WithLDFlags(f) }
+	if other.exportSymbols              { c = c.ExportAllSymbols(true) }
+	return c
+}

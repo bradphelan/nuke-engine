@@ -56,3 +56,18 @@ func TestConfigDerivation(t *testing.T) {
 		t.Fatal("debug2 should have 2 defines")
 	}
 }
+
+func TestConfigMerge(t *testing.T) {
+	a := New().WithIncludeDir("/a").WithDefine("A").WithCFlags("/W4")
+	b := New().WithIncludeDir("/b").WithDefine("B")
+	merged := a.Merge(b)
+	if len(merged.IncludeDirs()) != 2 { t.Fatal("includes") }
+	if len(merged.Defines()) != 2 { t.Fatal("defines") }
+	if len(a.IncludeDirs()) != 1 { t.Fatal("merge mutated original") }
+}
+
+func TestConfigMergeEmpty(t *testing.T) {
+	a := New().WithDefine("X")
+	merged := a.Merge(New())
+	if len(merged.Defines()) != 1 { t.Fatal("merging empty should preserve") }
+}
