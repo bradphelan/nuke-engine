@@ -48,19 +48,19 @@ go 1.21
 package app
 
 import (
-    "path/filepath"
-
-    "github.com/bradphelan/nuke-engine/artifact"
-    "github.com/bradphelan/nuke-engine/compiler"
     "github.com/bradphelan/nuke-engine/cpp"
-    "github.com/bradphelan/nuke-engine/target"
 )
 
-func Build(builder *cpp.CppBuilder, baseCfg compiler.Config, rootDir string) *target.Target[compiler.Config] {
-    return cpp.NewExe("app", builder, baseCfg).
-        Sources(artifact.Glob(filepath.Join(rootDir, "app", "src"), "**/*.cpp"))
-}
+var Def = cpp.Define(func(self cpp.Self) *cpp.Target {
+    return self.Exe().
+        Sources(self.Glob("src/**/*.cpp"))
+})
 ```
+
+`Def` is the package's exported target declaration. Inside the callback,
+`self` is a bound helper created from that declaration plus the current build
+context, so you can ask for its derived directory and create the right target
+kind without repeating the package name or passing `ctx` around.
 
 ---
 
@@ -106,7 +106,7 @@ Built: file:///.../myproject/build/bin/app.exe
 ```mermaid
 flowchart TD
     A["nuke-build --project app/"] --> B{find nuke.go}
-    B --> C[write build/_nuke/main.go\nimports your Build func]
+    B --> C[write build/_nuke/main.go\nimports your package Def]
     C --> D["go build → build/build.exe (Windows) / build/build.out (Linux)"]
     D --> E[build.exe / build.out runs]
     E --> F{cache hit?}

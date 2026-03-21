@@ -1,13 +1,65 @@
-package main_test
+package main
 
 import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
 )
+
+func writeModule(t *testing.T, dir, moduleName string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("mkdir %s: %v", dir, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module "+moduleName+"\n\ngo 1.26.1\n"), 0644); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "nuke.go"), []byte("package "+filepath.Base(dir)+"\n"), 0644); err != nil {
+		t.Fatalf("write nuke.go: %v", err)
+	}
+}
+
+func TestResolveProjectLayoutSingleModule(t *testing.T) {
+	root := t.TempDir()
+	appDir := filepath.Join(root, "app")
+	writeModule(t, appDir, "example.com/app")
+
+	gotRoot, gotProjects, err := resolveProjectLayout(appDir)
+	if err != nil {
+		t.Fatalf("resolveProjectLayout: %v", err)
+	}
+	if gotRoot != root {
+		t.Fatalf("rootDir = %s, want %s", gotRoot, root)
+	}
+	wantProjects := []string{appDir}
+	if !reflect.DeepEqual(gotProjects, wantProjects) {
+		t.Fatalf("projectDirs = %v, want %v", gotProjects, wantProjects)
+	}
+}
+
+func TestResolveProjectLayoutWorkspaceRoot(t *testing.T) {
+	root := t.TempDir()
+	appDir := filepath.Join(root, "app")
+	toolDir := filepath.Join(root, "tool")
+	writeModule(t, appDir, "example.com/app")
+	writeModule(t, toolDir, "example.com/tool")
+
+	gotRoot, gotProjects, err := resolveProjectLayout(root)
+	if err != nil {
+		t.Fatalf("resolveProjectLayout: %v", err)
+	}
+	if gotRoot != root {
+		t.Fatalf("rootDir = %s, want %s", gotRoot, root)
+	}
+	wantProjects := []string{appDir, toolDir}
+	if !reflect.DeepEqual(gotProjects, wantProjects) {
+		t.Fatalf("projectDirs = %v, want %v", gotProjects, wantProjects)
+	}
+}
 
 func findRepoRoot(t *testing.T) string {
 	t.Helper()

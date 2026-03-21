@@ -65,26 +65,32 @@ myproject/
 ├── go.work
 ├── app/
 │   ├── go.mod      # module name used as import path
-│   ├── nuke.go     # package <name>, exports Build(...)
+│   ├── nuke.go     # package <name>, exports Def
 │   └── src/
 │       └── *.cpp
 ```
 
-The `Build` function signature must match exactly:
+The package-level `Def` declaration is the entrypoint. The common shape is:
 
 ```go
-func Build(
-    builder *cpp.CppBuilder,
-    baseCfg compiler.Config,
-    rootDir string,          // absolute path to the workspace root (parent of app/)
-) *target.Target[compiler.Config]
+var Def = cpp.Define(func(self cpp.Self) *cpp.Target {
+    return self.Exe().
+        Sources(self.Glob("src/**/*.cpp"))
+})
 ```
 
-`rootDir` is the **parent** of the project directory. Use it to construct paths to sibling modules:
+`Def` is the stored package-level declaration. `self` is a thin bound helper
+created from `(Def + current build context)` when the declaration is realized.
+It gives you helpers like `Dir`, `Glob`, `Name`, `Exe`, `StaticLib`, and
+`SharedLib` without requiring the callback to thread `ctx` through every call.
+
+`self.RootDir()` is the **parent** of the project directory. `self.Dir()` is the
+usual way to get this module's absolute path. Use `self.RootDir()` when you need to
+refer to sibling modules explicitly.
 
 ```go
-dir := filepath.Join(rootDir, "app")        // this module's source
-siblingDir := filepath.Join(rootDir, "lib") // a sibling module
+dir := self.Dir()                            // this module's directory
+siblingDir := filepath.Join(self.RootDir(), "lib") // a sibling module
 ```
 
 ---
@@ -94,8 +100,8 @@ siblingDir := filepath.Join(rootDir, "lib") // a sibling module
 ### Executable
 
 ```go
-cpp.NewExe("myapp", builder, baseCfg).
-    Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
+self.Exe().
+    Sources(self.Glob("src/**/*.cpp"))
 ```
 
 Output: `build/bin/myapp.exe` (Windows) / `build/bin/myapp` (Linux/macOS).
@@ -103,10 +109,10 @@ Output: `build/bin/myapp.exe` (Windows) / `build/bin/myapp` (Linux/macOS).
 ### Static libraries
 
 ```go
-cpp.NewStaticLib("mylib", builder, baseCfg).
+self.StaticLib().
     PublicConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "include"))).
     PrivateConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "src", "internal"))).
-    Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
+    Sources(self.Glob("src/**/*.cpp"))
 ```
 
 - **`PublicConfig`** — include dirs/defines that consumers inherit automatically when they link against this library.
@@ -115,8 +121,8 @@ cpp.NewStaticLib("mylib", builder, baseCfg).
 ### Shared libraries
 
 ```go
-cpp.NewSharedLib("mylib", builder, baseCfg).
-    Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
+self.SharedLib().
+    Sources(self.Glob("src/**/*.cpp"))
 ```
 
 Output: `build/bin/mylib.dll` / `build/bin/libmylib.so`.
@@ -158,16 +164,19 @@ graph LR
 ## Linking targets together
 
 ```go
-libA := cpp.NewStaticLib("a", builder, baseCfg). ...
-libB := cpp.NewStaticLib("b", builder, baseCfg). ...
-
-exe := cpp.NewExe("app", builder, baseCfg).
-    LinkPublic(libA).    // libA's public config propagates to exe's consumers
-    LinkPrivate(libB).   // libB's public config stays private to this exe
-    Sources(...)
+var Def = cpp.Define(func(self cpp.Self) *cpp.Target {
+    return self.Exe().
+        LinkPublic(mathcore.Def).   // mathcore's public config propagates
+        LinkPrivate(simulation.Def). // simulation's public config stays private
+        Sources(self.Glob("src/**/*.cpp"))
+})
 ```
 
 `LinkPublic` vs `LinkPrivate` only matters when the target is itself a library consumed by something else. For a final executable both behave identically.
+
+When you pass `mathcore.Def` to `LinkPublic`, the fluent `*cpp.Target` resolves
+that declaration internally using the active `ctx`. You do not need to call
+`Resolve(ctx)` explicitly in module code.
 
 ---
 
@@ -186,7 +195,7 @@ physics-engine/
 │   └── nuke.go
 └── app/
     ├── go.mod   (module physics_engine)
-    └── nuke.go  ← entry point
+    └── nuke.go  ← entry point exports Def
 ```
 
 The `go.work` file ties them together during development:
@@ -208,6 +217,17 @@ import (
     "physics_engine/mathcore"
     "physics_engine/physics"
 )
+```
+
+and links their exported declarations directly:
+
+```go
+var Def = cpp.Define(func(self cpp.Self) *cpp.Target {
+    return self.Exe().
+        LinkPublic(mathcore.Def).
+        LinkPrivate(physics.Def).
+        Sources(self.Glob("src/**/*.cpp"))
+})
 ```
 
 ```mermaid

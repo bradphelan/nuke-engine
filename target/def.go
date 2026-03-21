@@ -19,6 +19,13 @@ type Def[Ctx resolveContext[C], C interface{ Merge(C) C }] struct {
 	build DefBuilder[Ctx, C]
 }
 
+// DefineNamed creates a module target declaration with an explicit canonical
+// name. This is useful for wrapper facades that need to preserve the original
+// caller's package-derived identity.
+func DefineNamed[Ctx resolveContext[C], C interface{ Merge(C) C }](name string, build DefBuilder[Ctx, C]) Def[Ctx, C] {
+	return Def[Ctx, C]{name: name, build: build}
+}
+
 // Define creates a module target declaration. The target name is derived from
 // the caller package directory name, so authors do not repeat it in code.
 func Define[Ctx resolveContext[C], C interface{ Merge(C) C }](build DefBuilder[Ctx, C]) Def[Ctx, C] {
@@ -27,7 +34,7 @@ func Define[Ctx resolveContext[C], C interface{ Merge(C) C }](build DefBuilder[C
 		panic("target.Define: could not resolve caller")
 	}
 	pkgDir := filepath.Base(filepath.Dir(file))
-	return Def[Ctx, C]{name: pkgDir, build: build}
+	return DefineNamed[Ctx, C](pkgDir, build)
 }
 
 func (d Def[Ctx, C]) Name() string { return d.name }

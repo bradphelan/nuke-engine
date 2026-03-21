@@ -40,18 +40,19 @@ flowchart LR
 package app
 
 import (
-    "github.com/bradphelan/nuke-engine/artifact"
-    "github.com/bradphelan/nuke-engine/compiler"
     "github.com/bradphelan/nuke-engine/cpp"
-    "github.com/bradphelan/nuke-engine/target"
-    "path/filepath"
 )
 
-func Build(builder *cpp.CppBuilder, baseCfg compiler.Config, rootDir string) *target.Target[compiler.Config] {
-    return cpp.NewExe("app", builder, baseCfg).
-        Sources(artifact.Glob(filepath.Join(rootDir, "app", "src"), "**/*.cpp"))
-}
+var Def = cpp.Define(func(self cpp.Self) *cpp.Target {
+    return self.Exe().
+        Sources(self.Glob("src/**/*.cpp"))
+})
 ```
+
+`Def` is the stored package-level declaration. Inside the callback, `self` is a
+thin bound helper created from `(Def + current build context)`. It provides
+convenience helpers like `Dir`, `Glob`, `Name`, `Exe`, `StaticLib`, and
+`SharedLib` for the declaration currently being realized.
 
 ```sh
 nuke-build --project myproject/app

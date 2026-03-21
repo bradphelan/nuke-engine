@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 )
 
@@ -41,8 +42,21 @@ import (
 	"github.com/bradphelan/nuke-engine/project"
 	"github.com/bradphelan/nuke-engine/target"
 
-	app "IMPORT_PATH"
+IMPORTS
 )
+
+func filterExecutableRoots(roots []*cpp.Target) []*cpp.Target {
+	var executables []*cpp.Target
+	for _, root := range roots {
+		if root.Kind() == target.Executable {
+			executables = append(executables, root)
+		}
+	}
+	if len(executables) == 0 {
+		return roots
+	}
+	return executables
+}
 
 func main() {
 	cliFlag          := flag.Bool("cli",               false, "interactive TUI mode")
@@ -67,8 +81,8 @@ func main() {
 	baseCfg := compiler.New().WithStandard(compiler.Cpp20).WithBuildType(compiler.Debug)
 
 	ctx := cpp.NewContext(builder, baseCfg, rootDir)
-	root := app.Def.Resolve(ctx)
-	targets := target.Collect(root)
+	roots := filterExecutableRoots(cpp.ResolveRegistered(ctx))
+	targets := cpp.Collect(roots...)
 
 	// Union of all target artifact sets; used for non-CLI single-shot operations.
 	var combined artifact.ArtifactSet
@@ -241,30 +255,28 @@ func main() {
 		log.Fatal("--project is required")
 	}
 
-	absProject, err := filepath.Abs(projectDir)
+	absInput, err := filepath.Abs(projectDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	rootDir, projectDirs, err := resolveProjectLayout(absInput)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	absBuild := buildDir
 	if absBuild == "" {
-		absBuild = filepath.Join(filepath.Dir(absProject), "build")
+		absBuild = filepath.Join(rootDir, "build")
 	} else {
 		if absBuild, err = filepath.Abs(absBuild); err != nil {
 			log.Fatal(err)
 		}
 	}
 
-	if _, err := os.Stat(filepath.Join(absProject, "nuke.go")); err != nil {
-		log.Fatalf("no nuke.go found in %s", absProject)
-	}
-
-	// rootDir is the parent of the project dir (e.g. physics-engine root)
-	rootDir := filepath.Dir(absProject)
-
 	// Walk ancestors to find a local nuke-engine checkout (dev mode).
 	// In deployed mode this returns "" and we reference the published module.
-	nukeEngineRoot := findNukeEngineRoot(absProject)
+	nukeEngineRoot := findNukeEngineRoot(rootDir)
 	if nukeEngineRoot == "" && nukeEngineVersion == "dev" {
 		log.Fatal("nuke-engine not found as a local checkout and nukeEngineVersion is 'dev'.\n" +
 			"Either run from inside the nuke-engine source tree, or build nuke-build with\n" +
@@ -272,10 +284,10 @@ func main() {
 	}
 
 	// Determine the import path for the project's nuke.go package.
-	// We read it from the project's go.mod module declaration.
-	projectModName := readModuleName(absProject)
-	if projectModName == "" {
-		log.Fatalf("could not determine module name from %s/go.mod", absProject)
+	// We read each import path from the module's go.mod declaration.
+	importsBlock, err := buildBootstrapImports(projectDirs)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// Stage dir lives inside build — never touches the source tree
@@ -295,7 +307,7 @@ func main() {
 	}
 
 	// Collect all sibling nuke module dirs (dirs containing nuke.go + go.mod)
-	siblings := collectNukeDirs(rootDir, absProject)
+	siblings := collectNukeDirs(rootDir, "")
 
 	// Write go.work with absolute use paths: stageDir + siblings + repoRoot
 	var w strings.Builder
@@ -304,8 +316,6 @@ func main() {
 	for _, s := range siblings {
 		fmt.Fprintf(&w, "\t%s\n", filepath.ToSlash(s))
 	}
-	// Include the project dir itself (the nuke.go package to import)
-	fmt.Fprintf(&w, "\t%s\n", filepath.ToSlash(absProject))
 	// In dev mode include the local nuke-engine checkout so module resolution
 	// doesn't go to the network. In deployed mode the go.mod require handles it.
 	if nukeEngineRoot != "" {
@@ -317,7 +327,7 @@ func main() {
 	}
 
 	// Write the bootstrap main.go, substituting import path and rootDir
-	bootstrap := strings.ReplaceAll(generatedBootstrap, "IMPORT_PATH", projectModName)
+	bootstrap := strings.ReplaceAll(generatedBootstrap, "IMPORTS", importsBlock)
 	bootstrap = strings.ReplaceAll(bootstrap, "ROOT_DIR", fmt.Sprintf("%q", filepath.ToSlash(rootDir)))
 	bootstrap = strings.ReplaceAll(bootstrap,
 		`buildDir := filepath.Dir(rootDir) + "/build"`,
@@ -347,6 +357,38 @@ func main() {
 	if err := run.Run(); err != nil {
 		log.Fatal("builder failed:", err)
 	}
+}
+
+func resolveProjectLayout(absInput string) (rootDir string, projectDirs []string, err error) {
+	if _, statErr := os.Stat(filepath.Join(absInput, "nuke.go")); statErr == nil {
+		return filepath.Dir(absInput), []string{absInput}, nil
+	}
+
+	projectDirs = collectNukeDirs(absInput, "")
+	if len(projectDirs) == 0 {
+		return "", nil, fmt.Errorf("no nuke.go found in %s and no child nuke modules discovered", absInput)
+	}
+	return absInput, projectDirs, nil
+}
+
+
+func buildBootstrapImports(projectDirs []string) (importsBlock string, err error) {
+	if len(projectDirs) == 0 {
+		return "", fmt.Errorf("no project modules supplied")
+	}
+
+	ordered := append([]string(nil), projectDirs...)
+	sort.Strings(ordered)
+
+	var imports strings.Builder
+	for _, dir := range ordered {
+		modName := readModuleName(dir)
+		if modName == "" {
+			return "", fmt.Errorf("could not determine module name from %s/go.mod", dir)
+		}
+		fmt.Fprintf(&imports, "\t_ %q\n", modName)
+	}
+	return strings.TrimRight(imports.String(), "\n"), nil
 }
 
 // forwardedArgs returns os.Args[1:] with nuke-build-specific flags removed.

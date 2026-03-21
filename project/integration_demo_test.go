@@ -12,7 +12,6 @@ import (
 	"github.com/bradphelan/nuke-engine/compiler"
 	"github.com/bradphelan/nuke-engine/compiler/msvc"
 	"github.com/bradphelan/nuke-engine/cpp"
-	"github.com/bradphelan/nuke-engine/target"
 )
 
 // findRepoRoot walks up from this test file to find the repo root (has go.mod).
@@ -166,7 +165,7 @@ func TestPhysicsEngineCleanRebuild(t *testing.T) {
 }
 
 // Helper functions used by this integration test to construct the demo graph.
-func mathcoreBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot string) *target.Target[compiler.Config] {
+func mathcoreBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot string) *cpp.Target {
 	dir := filepath.Join(demoRoot, "mathcore")
 	return cpp.NewStaticLib("mathcore", builder, baseCfg).
 		PublicConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "include"))).
@@ -174,7 +173,7 @@ func mathcoreBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot st
 		Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
 }
 
-func physicsBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot string, mc *target.Target[compiler.Config]) *target.Target[compiler.Config] {
+func physicsBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot string, mc *cpp.Target) *cpp.Target {
 	dir := filepath.Join(demoRoot, "physics")
 	return cpp.NewStaticLib("physics", builder, baseCfg).
 		PublicConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "include"))).
@@ -182,7 +181,7 @@ func physicsBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot str
 		Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
 }
 
-func rendererBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot string, mc *target.Target[compiler.Config]) *target.Target[compiler.Config] {
+func rendererBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot string, mc *cpp.Target) *cpp.Target {
 	dir := filepath.Join(demoRoot, "renderer")
 	return cpp.NewSharedLib("renderer", builder, baseCfg).
 		PublicConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "include")).WithDefine("RENDERER_EXPORTS")).
@@ -190,7 +189,7 @@ func rendererBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot st
 		Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
 }
 
-func simulationBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot string, ph, rn *target.Target[compiler.Config]) *target.Target[compiler.Config] {
+func simulationBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot string, ph, rn *cpp.Target) *cpp.Target {
 	dir := filepath.Join(demoRoot, "simulation")
 	return cpp.NewSharedLib("simulation", builder, baseCfg).
 		PublicConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "include")).WithDefine("SIMULATION_EXPORTS")).
@@ -199,7 +198,7 @@ func simulationBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot 
 		Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
 }
 
-func appBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot string, mc, sm *target.Target[compiler.Config]) *target.Target[compiler.Config] {
+func appBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot string, mc, sm *cpp.Target) *cpp.Target {
 	dir := filepath.Join(demoRoot, "app")
 	return cpp.NewExe("app", builder, baseCfg).
 		LinkPublic(mc).
