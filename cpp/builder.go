@@ -7,6 +7,13 @@ import (
 	"github.com/bradphelan/nuke-engine/target"
 )
 
+type configScope int
+
+const (
+	configPublic configScope = iota
+	configPrivate
+)
+
 type CppBuilder struct {
 	backend  compiler.Backend
 	buildDir string
@@ -40,7 +47,7 @@ func (b *CppBuilder) Exe(name string, cfg compiler.Config, inputs artifact.Artif
 }
 
 func wrapTarget(ctx *Context, raw *target.Target[compiler.Config]) *Target {
-	return &Target{ctx: ctx, raw: raw}
+	return &Target{ctx: ctx, raw: raw, scope: configPublic}
 }
 
 // Collect returns the unique target graph reachable from one or more roots.
@@ -65,8 +72,9 @@ func Collect(roots ...*Target) []*Target {
 // Target is a C++-specific fluent wrapper around the generic target.Target.
 // It carries optional context so declarations can link Defs directly.
 type Target struct {
-	ctx *Context
-	raw *target.Target[compiler.Config]
+	ctx   *Context
+	raw   *target.Target[compiler.Config]
+	scope configScope
 }
 
 func (t *Target) Raw() *target.Target[compiler.Config] { return t.raw }
@@ -81,13 +89,74 @@ func (t *Target) PrivateCfg() compiler.Config { return t.raw.PrivateCfg() }
 
 func (t *Target) ResolvedConfig() compiler.Config { return t.raw.ResolvedConfig() }
 
-func (t *Target) PublicConfig(cfg compiler.Config) *Target {
-	t.raw.PublicConfig(cfg)
+func (t *Target) Public() *Target {
+	t.scope = configPublic
 	return t
 }
 
-func (t *Target) PrivateConfig(cfg compiler.Config) *Target {
-	t.raw.PrivateConfig(cfg)
+func (t *Target) Private() *Target {
+	t.scope = configPrivate
+	return t
+}
+
+func (t *Target) applyConfig(cfg compiler.Config) {
+	if t.scope == configPrivate {
+		t.raw.PrivateConfig(cfg)
+		return
+	}
+	t.raw.PublicConfig(cfg)
+}
+
+func (t *Target) WithStandard(s compiler.Standard) *Target {
+	t.applyConfig(compiler.New().WithStandard(s))
+	return t
+}
+
+func (t *Target) WithBuildType(bt compiler.BuildType) *Target {
+	t.applyConfig(compiler.New().WithBuildType(bt))
+	return t
+}
+
+func (t *Target) WithDefine(d string) *Target {
+	t.applyConfig(compiler.New().WithDefine(d))
+	return t
+}
+
+func (t *Target) WithIncludeDir(dir string) *Target {
+	t.applyConfig(compiler.New().WithIncludeDir(dir))
+	return t
+}
+
+func (t *Target) WithCFlags(flags ...string) *Target {
+	t.applyConfig(compiler.New().WithCFlags(flags...))
+	return t
+}
+
+func (t *Target) WithLDFlags(flags ...string) *Target {
+	t.applyConfig(compiler.New().WithLDFlags(flags...))
+	return t
+}
+
+func (t *Target) ExportAllSymbols(b bool) *Target {
+	t.applyConfig(compiler.New().ExportAllSymbols(b))
+	return t
+}
+
+func (t *Target) PublicConfig(configure func(compiler.Config) compiler.Config) *Target {
+	if configure == nil {
+		panic("cpp.Target PublicConfig requires a non-nil configure function")
+	}
+	t.raw.PublicConfig(configure(compiler.New()))
+	t.scope = configPublic
+	return t
+}
+
+func (t *Target) PrivateConfig(configure func(compiler.Config) compiler.Config) *Target {
+	if configure == nil {
+		panic("cpp.Target PrivateConfig requires a non-nil configure function")
+	}
+	t.raw.PrivateConfig(configure(compiler.New()))
+	t.scope = configPrivate
 	return t
 }
 

@@ -43,8 +43,9 @@ func TestCppTargetWithConfig(t *testing.T) {
 	cfg := compiler.New().WithStandard(compiler.Cpp20)
 
 	tgt := NewStaticLib("mc", b, cfg).
-		PublicConfig(compiler.New().WithIncludeDir("/mc/include")).
-		PrivateConfig(compiler.New().WithIncludeDir("/mc/internal")).
+		WithIncludeDir("/mc/include").
+		Private().
+		WithIncludeDir("/mc/internal").
 		Sources(artifact.NewSliceSet(nil))
 
 	resolved := tgt.ResolvedConfig()
@@ -72,5 +73,19 @@ func TestCppTargetWithConfig(t *testing.T) {
 
 	if resolved.Standard() != compiler.Cpp20 {
 		t.Fatal("base config standard lost")
+	}
+}
+
+func TestCppTargetDefaultScopeIsPublic(t *testing.T) {
+	b := NewBuilder(nil, "/build")
+	tgt := NewStaticLib("mc", b, compiler.New()).
+		WithIncludeDir("/mc/include")
+
+	incs := tgt.PublicCfg().IncludeDirs()
+	if len(incs) != 1 || incs[0] != "/mc/include" {
+		t.Fatalf("default scope should be public, got %v", incs)
+	}
+	if len(tgt.PrivateCfg().IncludeDirs()) != 0 {
+		t.Fatal("default scope should not write into private config")
 	}
 }

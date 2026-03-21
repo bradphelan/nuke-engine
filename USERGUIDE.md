@@ -1,8 +1,9 @@
 # User Guide
 
-## Table of contents
+Scope: this document is the user-facing reference for writing build declarations and using the CLI.
+Internal implementation details and bootstrap pipeline internals are intentionally documented in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-- [Concepts](#concepts)
+## Table of contents
 - [Project structure](#project-structure)
 - [Target types](#target-types)
   - [Executable](#executable)
@@ -14,47 +15,6 @@
 - [Build directory](#build-directory)
 - [CLI reference](#cli-reference)
 - [Caching](#caching)
-- [How nuke-build works internally](#how-nuke-build-works-internally)
-
----
-
-## Concepts
-
-nuke-engine models a build as a **graph of artifact sets**.
-
-```mermaid
-graph LR
-    S[Source .cpp files\nArtifactSet] -->|CompileRule| O[Object files\nArtifactSet]
-    O -->|StaticLibRule| L[.lib / .a\nArtifactSet]
-    O2[More objects] --> L2[Another .lib]
-    L & L2 -->|ExeRule| E[app.exe\nArtifactSet]
-```
-
-Every node in the graph is an `ArtifactSet`. The engine walks the graph, fingerprints each node's inputs, and only re-runs rules whose inputs have changed. Results are stored in a content-addressed BoltDB cache.
-
-### Two-phase build
-
-```mermaid
-sequenceDiagram
-    participant U as Developer
-    participant NB as nuke-build
-    participant Go as Go compiler
-    participant Builder as build.exe / build.out
-    participant CC as C++ compiler
-
-    U->>NB: nuke-build --project physics-engine/
-    NB->>NB: resolve project layout\ndiscover module dirs
-    NB->>NB: generate bootstrap\nthat imports all modules
-    NB->>Go: build/_nuke/main.go\n(generated bootstrap)
-    Go-->>NB: build/build.exe (Windows) or build/build.out (Linux)
-    NB->>Builder: exec build.exe / build.out [forwarded flags]
-    Builder->>Builder: resolve registered Defs\nprefer executable roots
-    Builder->>CC: compile/link (cache misses only)
-    CC-->>Builder: .obj, .lib, .exe
-    Builder-->>U: Stats + Built: path
-```
-
-The generated bootstrap in `build/_nuke/` is **ephemeral** — it is regenerated every time and lives entirely inside the build directory.
 
 ---
 
@@ -112,8 +72,9 @@ Output: `build/bin/myapp.exe` (Windows) / `build/bin/myapp` (Linux/macOS).
 
 ```go
 self.StaticLib().
-    PublicConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "include"))).
-    PrivateConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "src", "internal"))).
+    WithIncludeDir(filepath.Join(dir, "include")).
+    Private().
+    WithIncludeDir(filepath.Join(dir, "src", "internal")).
     Sources(self.Glob("src/**/*.cpp"))
 ```
 
@@ -332,6 +293,8 @@ Built: file:///path/to/output
 ---
 
 ## Caching
+
+For cache internals and graph evaluation model, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 nuke-engine uses a **content-addressed** cache backed by [bbolt](https://github.com/etcd-io/bbolt).
 

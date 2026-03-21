@@ -58,22 +58,32 @@ func TestFullDemoBuild(t *testing.T) {
 
 	// Build the target graph directly for this integration test.
 	mc := cpp.NewStaticLib("mathcore", builder, baseCfg).
-		PublicConfig(compiler.New().WithIncludeDir(filepath.Join(demoRoot, "mathcore", "include"))).
-		PrivateConfig(compiler.New().WithIncludeDir(filepath.Join(demoRoot, "mathcore", "src", "internal"))).
+		PublicConfig(func(cfg compiler.Config) compiler.Config {
+			return cfg.WithIncludeDir(filepath.Join(demoRoot, "mathcore", "include"))
+		}).
+		PrivateConfig(func(cfg compiler.Config) compiler.Config {
+			return cfg.WithIncludeDir(filepath.Join(demoRoot, "mathcore", "src", "internal"))
+		}).
 		Sources(artifact.Glob(filepath.Join(demoRoot, "mathcore", "src"), "**/*.cpp"))
 
 	ph := cpp.NewStaticLib("physics", builder, baseCfg).
-		PublicConfig(compiler.New().WithIncludeDir(filepath.Join(demoRoot, "physics", "include"))).
+		PublicConfig(func(cfg compiler.Config) compiler.Config {
+			return cfg.WithIncludeDir(filepath.Join(demoRoot, "physics", "include"))
+		}).
 		LinkPublic(mc).
 		Sources(artifact.Glob(filepath.Join(demoRoot, "physics", "src"), "**/*.cpp"))
 
 	rn := cpp.NewSharedLib("renderer", builder, baseCfg).
-		PublicConfig(compiler.New().WithIncludeDir(filepath.Join(demoRoot, "renderer", "include")).WithDefine("RENDERER_EXPORTS")).
+		PublicConfig(func(cfg compiler.Config) compiler.Config {
+			return cfg.WithIncludeDir(filepath.Join(demoRoot, "renderer", "include")).WithDefine("RENDERER_EXPORTS")
+		}).
 		LinkPublic(mc).
 		Sources(artifact.Glob(filepath.Join(demoRoot, "renderer", "src"), "**/*.cpp"))
 
 	sm := cpp.NewSharedLib("simulation", builder, baseCfg).
-		PublicConfig(compiler.New().WithIncludeDir(filepath.Join(demoRoot, "simulation", "include")).WithDefine("SIMULATION_EXPORTS")).
+		PublicConfig(func(cfg compiler.Config) compiler.Config {
+			return cfg.WithIncludeDir(filepath.Join(demoRoot, "simulation", "include")).WithDefine("SIMULATION_EXPORTS")
+		}).
 		LinkPrivate(ph).
 		LinkPrivate(rn).
 		Sources(artifact.Glob(filepath.Join(demoRoot, "simulation", "src"), "**/*.cpp"))
@@ -168,15 +178,21 @@ func TestPhysicsEngineCleanRebuild(t *testing.T) {
 func mathcoreBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot string) *cpp.Target {
 	dir := filepath.Join(demoRoot, "mathcore")
 	return cpp.NewStaticLib("mathcore", builder, baseCfg).
-		PublicConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "include"))).
-		PrivateConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "src", "internal"))).
+		PublicConfig(func(cfg compiler.Config) compiler.Config {
+			return cfg.WithIncludeDir(filepath.Join(dir, "include"))
+		}).
+		PrivateConfig(func(cfg compiler.Config) compiler.Config {
+			return cfg.WithIncludeDir(filepath.Join(dir, "src", "internal"))
+		}).
 		Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
 }
 
 func physicsBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot string, mc *cpp.Target) *cpp.Target {
 	dir := filepath.Join(demoRoot, "physics")
 	return cpp.NewStaticLib("physics", builder, baseCfg).
-		PublicConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "include"))).
+		PublicConfig(func(cfg compiler.Config) compiler.Config {
+			return cfg.WithIncludeDir(filepath.Join(dir, "include"))
+		}).
 		LinkPublic(mc).
 		Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
 }
@@ -184,7 +200,9 @@ func physicsBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot str
 func rendererBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot string, mc *cpp.Target) *cpp.Target {
 	dir := filepath.Join(demoRoot, "renderer")
 	return cpp.NewSharedLib("renderer", builder, baseCfg).
-		PublicConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "include")).WithDefine("RENDERER_EXPORTS")).
+		PublicConfig(func(cfg compiler.Config) compiler.Config {
+			return cfg.WithIncludeDir(filepath.Join(dir, "include")).WithDefine("RENDERER_EXPORTS")
+		}).
 		LinkPublic(mc).
 		Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
 }
@@ -192,7 +210,9 @@ func rendererBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot st
 func simulationBuild(builder *cpp.CppBuilder, baseCfg compiler.Config, demoRoot string, ph, rn *cpp.Target) *cpp.Target {
 	dir := filepath.Join(demoRoot, "simulation")
 	return cpp.NewSharedLib("simulation", builder, baseCfg).
-		PublicConfig(compiler.New().WithIncludeDir(filepath.Join(dir, "include")).WithDefine("SIMULATION_EXPORTS")).
+		PublicConfig(func(cfg compiler.Config) compiler.Config {
+			return cfg.WithIncludeDir(filepath.Join(dir, "include")).WithDefine("SIMULATION_EXPORTS")
+		}).
 		LinkPrivate(ph).
 		LinkPrivate(rn).
 		Sources(artifact.Glob(filepath.Join(dir, "src"), "**/*.cpp"))
