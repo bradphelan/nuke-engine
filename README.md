@@ -2,7 +2,9 @@
 
 Build C++ with plain Go.
 
-`nuke-engine` lets you declare C++ targets as normal Go code, compose them across modules, and build them through a content-addressed cache. No YAML. No custom DSL. No generator files checked into your repo.
+`nuke-engine` is a replacement for CMake + Ninja when you want your build logic to be real Go code. Define C++ targets in code, compose them across modules, and get content-addressed incremental builds without a separate DSL.
+
+It is type-safe and IDE/IntelliSense friendly. No more string-bashing macros or brittle CMake generator expressions. You can use full Go language features, normal tooling, and refactoring support for your build logic.
 
 <p align="center">
     <a href="docs/nuke.jpg">
