@@ -42,11 +42,13 @@ sequenceDiagram
     participant Builder as build.exe / build.out
     participant CC as C++ compiler
 
-    U->>NB: nuke-build --project app/
-    NB->>NB: read app/nuke.go\ndetermine import path
+    U->>NB: nuke-build --project physics-engine/
+    NB->>NB: resolve project layout\ndiscover module dirs
+    NB->>NB: generate bootstrap\nthat imports all modules
     NB->>Go: build/_nuke/main.go\n(generated bootstrap)
     Go-->>NB: build/build.exe (Windows) or build/build.out (Linux)
     NB->>Builder: exec build.exe / build.out [forwarded flags]
+    Builder->>Builder: resolve registered Defs\nprefer executable roots
     Builder->>CC: compile/link (cache misses only)
     CC-->>Builder: .obj, .lib, .exe
     Builder-->>U: Stats + Built: path
@@ -70,7 +72,7 @@ myproject/
 │       └── *.cpp
 ```
 
-The package-level `Def` declaration is the entrypoint. The common shape is:
+The package-level `Def` declaration is the module's exported build declaration. The common shape is:
 
 ```go
 var Def = cpp.Define(func(self cpp.Self) *cpp.Target {
@@ -195,7 +197,7 @@ physics-engine/
 │   └── nuke.go
 └── app/
     ├── go.mod   (module physics_engine)
-    └── nuke.go  ← entry point exports Def
+    └── nuke.go  ← executable module exports Def
 ```
 
 The `go.work` file ties them together during development:
@@ -210,7 +212,7 @@ use (
 )
 ```
 
-The entry-point `app/nuke.go` imports sibling modules by their module path:
+An executable module like `app/nuke.go` imports sibling modules by their module path:
 
 ```go
 import (
@@ -240,11 +242,22 @@ graph TD
 
 `nuke-build` discovers the workspace by reading `go.mod` files and generates a temporary `go.work` with absolute paths so that the bootstrap can be compiled from any working directory.
 
+When `--project` points at a workspace root instead of a specific module directory, `nuke-build` discovers all immediate child module directories containing both `go.mod` and `nuke.go`, imports all of them into the generated bootstrap, resolves every registered `Def`, and uses executable targets as the default roots. If no executable targets are registered, it falls back to all resolved targets.
+
+That means a workspace can contain multiple executable modules. You do not need to nominate a single entry module just to make root-level builds work.
+
 ---
 
 ## Build directory
 
-By default outputs go to `<workspace-parent>/build/`:
+By default outputs go to `<root>/build/`.
+
+`<root>` means:
+
+- the parent directory of the module package when `--project` points directly at a `nuke.go` package
+- the workspace root itself when `--project` points at a workspace root
+
+For the `physics-engine/` example, that means:
 
 ```
 physics-engine/
@@ -266,7 +279,7 @@ physics-engine/
 Override with `--build-dir`:
 
 ```sh
-nuke-build --project app --build-dir /tmp/mybuild
+nuke-build --project physics-engine --build-dir /tmp/mybuild
 ```
 
 Everything under `build/` is **fully reproducible** from source. Add it to `.gitignore`.
@@ -279,8 +292,8 @@ Everything under `build/` is **fully reproducible** from source. Add it to `.git
 nuke-build [flags]
 
 Flags:
-  --project <dir>    Path to the directory containing nuke.go  (required)
-  --build-dir <dir>  Output directory (default: <project-parent>/build)
+    --project <dir>    Path to a module directory or workspace root  (required)
+    --build-dir <dir>  Output directory (default: <resolved-root>/build)
   --version          Print version and exit
   -h / --help        Show this help
 
@@ -293,6 +306,12 @@ Forwarded to build.exe / build.out:
 ```
 
 Any flag not recognised by `nuke-build` itself (`--project`, `--build-dir`, `--version`) is passed through verbatim to `build.exe` / `build.out`.
+
+Examples:
+
+- `nuke-build --project app` builds a single module package.
+- `nuke-build --project physics-engine` builds from a workspace root.
+- In workspace-root mode, all discovered module packages are imported into the bootstrap so their package-level `Def` declarations register automatically.
 
 ### Exit codes
 

@@ -1,3 +1,5 @@
 build/
 *.exe
 *.pdb
+**/go.work
+**/go.work.sum

@@ -344,6 +344,9 @@ func main() {
 	builderExe := filepath.Join(absBuild, builderName)
 	build := exec.Command("go", "build", "-o", builderExe, ".")
 	build.Dir = stageDir
+	// Pin workspace resolution to the staged go.work so source-tree go.work.sum
+	// files are never touched by nuke-build, even if caller exported GOWORK.
+	build.Env = append(os.Environ(), "GOWORK="+filepath.Join(stageDir, "go.work"))
 	build.Stdout = os.Stdout
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {

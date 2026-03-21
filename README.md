@@ -1,21 +1,81 @@
 # nuke-engine
 
-A content-addressed, incremental C++ build system written in Go. Build rules are plain Go code — no DSL, no YAML, no magic.
+Build C++ with plain Go.
+
+`nuke-engine` lets you declare C++ targets as normal Go code, compose them across modules, and build them through a content-addressed cache. No YAML. No custom DSL. No generator files checked into your repo.
+
+## Quick example
+
+```go
+// myproject/app/nuke.go
+package app
+
+import (
+    "github.com/bradphelan/nuke-engine/cpp"
+
+    "myproject/mathcore"
+    "myproject/simulation"
+)
+
+var Def = cpp.Define(func(self cpp.Self) *cpp.Target {
+    return self.Exe().
+        LinkPublic(mathcore.Def).
+        LinkPrivate(simulation.Def).
+        Sources(self.Glob("src/**/*.cpp"))
+})
+```
+
+```sh
+nuke-build --project myproject
+```
+
+That one command will:
+
+1. Discover your build modules.
+2. Generate a temporary bootstrap under `build/_nuke/`.
+3. Import all discovered module packages.
+4. Resolve registered `Def` declarations.
+5. Build executable roots and their transitive dependencies.
+
+## Why this is better than another build DSL
+
+- Build rules are normal Go code, so composition and refactoring are just code.
+- C++ targets link by importing sibling modules and referencing exported `Def` values.
+- Incremental rebuilds are automatic because outputs are fingerprinted from their inputs.
+- The generated bootstrap lives in `build/`, not in your source tree.
+- A workspace root can contain multiple executables; `nuke-build` will discover them and build executable roots by default.
+
+## Core model
+
+- Each build module exports one package-level `Def`.
+- `cpp.Define(...)` stores the declaration and registers it when the package is imported.
+- Inside the callback, `self` is a context-bound helper for the current module.
+- `self.Exe()`, `self.StaticLib()`, and `self.SharedLib()` declare target kind.
+- `LinkPublic(other.Def)` and `LinkPrivate(other.Def)` express target graph edges.
+- `self.Glob("src/**/*.cpp")` resolves sources relative to the module directory.
 
 ```mermaid
 flowchart LR
-    A[nuke.go\nbuild rules] -->|nuke-build compiles| B[build.exe / build.out]
-    B -->|runs| C[C++ compiler\nMSVC / clang / gcc]
-    C --> D[.lib / .exe / .so]
-    B -->|cache hit| D
+    A[nuke.go packages\nexport Def] -->|nuke-build discovers| B[generated bootstrap]
+    B -->|go build| C[build.exe / build.out]
+    C -->|imports modules| D[registered Def set]
+    D -->|resolve roots| E[target graph]
+    E -->|cache misses only| F[C++ compiler\nMSVC / clang / gcc]
+    F --> G[.lib / .exe / .so]
+    E -->|cache hit| G
 ```
 
-## Key ideas
+## Common commands
 
-- **Build rules are Go code.** A `nuke.go` file in your project declares targets using the nuke-engine API. No special syntax to learn.
-- **Content-addressed cache.** Outputs are fingerprinted by their inputs. A rebuild only runs rules whose inputs changed.
-- **Two-phase execution.** `nuke-build` first compiles your `nuke.go` into a self-contained `build.exe` (Windows) / `build.out` (Linux/macOS) binary, then runs it. The source tree is never modified.
-- **Dependency discovery.** On MSVC the `/showIncludes` flag is used to record discovered headers; subsequent builds re-fingerprint them automatically.
+```sh
+# Build from a specific module package
+nuke-build --project myproject/app
+
+# Build from a workspace root containing child modules
+nuke-build --project myproject
+```
+
+Both forms are valid. In workspace-root mode, `nuke-build` imports all discovered child modules and resolves every registered `Def`.
 
 ## Docs
 
@@ -32,31 +92,6 @@ flowchart LR
 | Windows | MSVC (VS 2019 / 2022) | ✅ |
 | Linux | GCC / Clang | planned |
 | macOS | Clang | planned |
-
-## Quick example
-
-```go
-// myproject/app/nuke.go
-package app
-
-import (
-    "github.com/bradphelan/nuke-engine/cpp"
-)
-
-var Def = cpp.Define(func(self cpp.Self) *cpp.Target {
-    return self.Exe().
-        Sources(self.Glob("src/**/*.cpp"))
-})
-```
-
-`Def` is the stored package-level declaration. Inside the callback, `self` is a
-thin bound helper created from `(Def + current build context)`. It provides
-convenience helpers like `Dir`, `Glob`, `Name`, `Exe`, `StaticLib`, and
-`SharedLib` for the declaration currently being realized.
-
-```sh
-nuke-build --project myproject/app
-```
 
 ## License
 

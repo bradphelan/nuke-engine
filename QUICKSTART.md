@@ -80,8 +80,16 @@ use (
 ## 6. Build
 
 ```powershell
+nuke-build --project myproject
+```
+
+You can also point directly at the module package:
+
+```powershell
 nuke-build --project myproject/app
 ```
+
+For this simple layout, both commands resolve the same build root.
 
 First run compiles everything:
 
@@ -105,15 +113,18 @@ Built: file:///.../myproject/build/bin/app.exe
 
 ```mermaid
 flowchart TD
-    A["nuke-build --project app/"] --> B{find nuke.go}
-    B --> C[write build/_nuke/main.go\nimports your package Def]
-    C --> D["go build → build/build.exe (Windows) / build/build.out (Linux)"]
-    D --> E[build.exe / build.out runs]
-    E --> F{cache hit?}
-    F -- yes --> G[skip rule]
-    F -- no --> H[compile / link]
-    H --> I[store result in cache]
-    G & I --> J[app.exe]
+    A["nuke-build --project myproject"] --> B{discover project layout}
+    B --> C[scan child modules with go.mod + nuke.go]
+    C --> D[write build/_nuke/main.go]
+    D --> E[import discovered module packages]
+    E --> F[resolve registered Def declarations]
+    F --> G["go build → build/build.exe (Windows) / build/build.out (Linux)"]
+    G --> H[build.exe / build.out runs]
+    H --> I{cache hit?}
+    I -- yes --> J[skip rule]
+    I -- no --> K[compile / link]
+    K --> L[store result in cache]
+    J & L --> M[app.exe]
 ```
 
 The generated `build/` directory is safe to delete at any time — it is never part of your source tree.
