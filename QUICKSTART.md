@@ -62,6 +62,31 @@ var Def = cpp.Define(func(self cpp.Self) *cpp.Target {
 context, so you can ask for its derived directory and create the right target
 kind without repeating the package name or passing `ctx` around.
 
+If you split code into libraries, set **public** include paths for consumers and
+**private** include paths for implementation details:
+
+```go
+// mathcore/nuke.go
+package mathcore
+
+import (
+    "path/filepath"
+
+    "github.com/bradphelan/nuke-engine/compiler"
+    "github.com/bradphelan/nuke-engine/cpp"
+)
+
+var Def = cpp.Define(func(self cpp.Self) *cpp.Target {
+    return self.StaticLib().
+        PublicConfig(compiler.New().WithIncludeDir(filepath.Join(self.Dir(), "include"))).
+        PrivateConfig(compiler.New().WithIncludeDir(filepath.Join(self.Dir(), "src", "internal"))).
+        Sources(self.Glob("src/**/*.cpp"))
+})
+```
+
+`PublicConfig` propagates to dependents. `PrivateConfig` is used only while
+compiling this target.
+
 ---
 
 ## 5. Create the workspace

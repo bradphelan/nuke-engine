@@ -12,6 +12,7 @@ import (
 var Def = cpp.Define(func(self cpp.Self) *cpp.Target {
 	return self.SharedLib().
 		PublicConfig(compiler.New().WithIncludeDir(filepath.Join(self.Dir(), "include")).WithDefine("RENDERER_EXPORTS")).
+		PrivateConfig(compiler.New().WithIncludeDir(filepath.Join(self.Dir(), "src"))).
 		LinkPublic(mathcore.Def).
 		Sources(self.Glob("src/**/*.cpp"))
 })
