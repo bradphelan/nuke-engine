@@ -4,6 +4,16 @@ Build C++ with plain Go.
 
 `nuke-engine` lets you declare C++ targets as normal Go code, compose them across modules, and build them through a content-addressed cache. No YAML. No custom DSL. No generator files checked into your repo.
 
+<p align="center">
+    <a href="docs/nuke.jpg">
+        <img src="docs/nuke.jpg" alt="Nuke Build Engine poster" width="760" style="max-width: 100%; height: auto; border-radius: 14px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);" />
+    </a>
+</p>
+
+<p align="center">
+    <sub><strong>Nuke Build Engine</strong> - Build like a pro in the wasteland.</sub>
+</p>
+
 ## Quick example
 
 ```go
